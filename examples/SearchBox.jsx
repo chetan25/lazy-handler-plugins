@@ -32,7 +32,7 @@ import {
   __nuggetCreateScope,
   __nuggetDestroyScope,
   __nuggetRegisterRef,
-} from "lazy-handler-webpack-plugin/runtime";
+} from "lazy-handler-plugin/runtime";
 import { useRef, useEffect } from "react";
 
 export function SearchBoxAfter() {
@@ -77,7 +77,7 @@ export function SearchBoxAfter() {
 
 // The emitted nugget chunk (static/nuggets/nugget-7f3a9b2c.js) looks like this:
 //
-// import { __nuggetDeref, __nuggetHasScope } from "lazy-handler-webpack-plugin/runtime";
+// import { __nuggetDeref, __nuggetHasScope } from "lazy-handler-plugin/runtime";
 //
 // export default async function nugget_onClick_7f3a9b2c(args, { scopeId }) {
 //   if (!__nuggetHasScope(scopeId)) return; // unmounted

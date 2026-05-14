@@ -1,15 +1,20 @@
-# lazy-handler-webpack-plugin
+# lazy-handler-plugin
 
-> Webpack plugin that auto-extracts JSX event handlers into micro-chunks.
+> Webpack / Rollup / Vite plugin that auto-extracts JSX event handlers into micro-chunks.
 > Ships **zero handler JS** until the user triggers an interaction.
 
-Inspired by [Qwik's resumability](https://qwik.dev/docs/concepts/resumable/) and SolidJS's fine-grained reactivity — implemented as a Webpack plugin so it works with **any existing React app (CRA, custom webpack, Next.js App Router)** without migrating to a new framework.
+Inspired by [Qwik's resumability](https://qwik.dev/docs/concepts/resumable/) and SolidJS's fine-grained reactivity — implemented as a build-time AST transform with thin per-bundler adapters, so it works with **any existing React app (CRA, custom webpack, Next.js App Router, Vite, Rollup)** without migrating to a new framework.
 
-> **Status — 0.1.0 (experimental).**
-> Webpack 5 + React 18 only. The plugin has been validated end-to-end against
-> a custom webpack app and a Next.js 14 App Router app (see [`examples/`](./examples)).
-> Vite/Rollup are **not** supported — Vite uses Rollup/esbuild, not webpack,
-> so a separate adapter would be required. See [Limitations](#limitations).
+> **Status — 0.1.0 (experimental).** React 18 only. Validated end-to-end against:
+> - a custom webpack app ([`examples/test-react-app/`](./examples/test-react-app))
+> - a Next.js 14 App Router app ([`examples/test-nextjs-app/`](./examples/test-nextjs-app))
+> - a Vite 5 app ([`examples/test-vite-app/`](./examples/test-vite-app))
+
+| Bundler | Adapter export | Status |
+|---|---|---|
+| Webpack 5 | `lazy-handler-plugin` (default) or `lazy-handler-plugin/webpack` | ✅ |
+| Vite 5 | `lazy-handler-plugin/vite` | ✅ |
+| Rollup 4 | `lazy-handler-plugin/rollup` | ✅ (same adapter as Vite) |
 
 ---
 
@@ -89,7 +94,7 @@ Browser (runtime)
 ## Install
 
 ```bash
-npm install --save-dev lazy-handler-webpack-plugin
+npm install --save-dev lazy-handler-plugin
 ```
 
 **Peer dependencies** (install if not already present):
@@ -106,7 +111,7 @@ npm install --save-dev @babel/parser @babel/traverse @babel/generator @babel/typ
 ```js
 // webpack.config.js
 const path = require("path");
-const LazyHandlerPlugin = require("lazy-handler-webpack-plugin");
+const LazyHandlerPlugin = require("lazy-handler-plugin");
 
 module.exports = {
   // … your existing config
@@ -142,7 +147,7 @@ A complete, runnable webpack example lives at
 
 ```js
 // next.config.js
-const LazyHandlerPlugin = require("lazy-handler-webpack-plugin");
+const LazyHandlerPlugin = require("lazy-handler-plugin");
 
 module.exports = {
   reactStrictMode: true,
@@ -194,6 +199,45 @@ import { useState } from "react";
 A complete, runnable Next.js example lives at
 [`examples/test-nextjs-app/`](./examples/test-nextjs-app/).
 
+### Vite (and pure Rollup)
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import lazyHandler from "lazy-handler-plugin/vite";
+
+export default defineConfig({
+  plugins: [
+    // Order matters: lazyHandler must see raw JSX before plugin-react
+    // rewrites it. Its `enforce: "pre"` already ensures this, but listing
+    // it first makes the intent obvious.
+    lazyHandler({
+      eventProps: ["onClick", "onSubmit", "onChange", "onKeyDown"],
+      minHandlerLines: 3,
+      belowFoldThreshold: 600,
+      nuggetDir: "static/nuggets",
+    }),
+    react(),
+  ],
+});
+```
+
+The adapter:
+- Routes `nugget-*` chunks to `<nuggetDir>/[name].js` via the build's
+  `rollupOptions.output.chunkFileNames`.
+- Injects `__NUGGET_BASE__ = import.meta.env.BASE_URL`, so the runtime
+  preload URL respects Vite's `base` config.
+- Skips itself during `vite dev` (esbuild, on-demand modules) — handler
+  extraction defeats Vite's instant-update model.
+
+For pure Rollup, import from `lazy-handler-plugin/rollup` instead; the
+adapter is the same module under both subpaths and the Vite-only hooks
+become no-ops.
+
+A complete, runnable Vite example lives at
+[`examples/test-vite-app/`](./examples/test-vite-app/).
+
 ---
 
 ## Options
@@ -233,11 +277,37 @@ onClick={function(e) {
   trackAnalytics("submit");
 }}
 
-// ❌ Not extracted — identifier ref (already defined elsewhere)
-onClick={handleClick}
+// ✅ Extracted — identifier ref to a named handler declared in the same
+// component, provided the binding is referenced ONLY from JSX event-prop
+// attributes. The original declaration is removed from the main bundle.
+const handleClick = async () => {
+  setLoading(true);
+  await doWork();
+  setLoading(false);
+};
+// ...later...
+<button onClick={handleClick}>Click me</button>
 
 // ❌ Not extracted — too short (below minHandlerLines)
 onClick={() => setOpen(true)}
+
+// ❌ Not extracted — `handleClick` is also referenced outside JSX (here
+// in a useEffect dep array), so removing the original would break the
+// other site. The plugin leaves the declaration alone.
+const handleClick = () => doWork();
+useEffect(() => { /* uses handleClick */ }, [handleClick]);
+<button onClick={handleClick}>Click me</button>
+
+// ❌ Not extracted — useCallback-wrapped handlers (not yet supported)
+const handleClick = useCallback(() => { ... }, []);
+
+// ❌ Not extracted — member expressions (this.method, obj.method)
+onClick={this.handleClick}
+
+// ❌ Not extracted — imported handlers (already live in another module's
+// bundle; moving them around makes the chunk graph confusing)
+import { handleClick } from "./handlers";
+onClick={handleClick}
 ```
 
 ---
@@ -282,7 +352,7 @@ function BuyButton({ productId }) {
 **Plugin emits (separate chunk, ~3KB, loads on first click):**
 ```js
 // static/nuggets/nugget-a3f7c9.js
-import { __nuggetDeref, __nuggetHasScope } from "lazy-handler-webpack-plugin/runtime";
+import { __nuggetDeref, __nuggetHasScope } from "lazy-handler-plugin/runtime";
 
 export default async function nugget_onClick_a3f7c9(args, { scopeId }) {
   if (!__nuggetHasScope(scopeId)) return; // component unmounted
@@ -359,7 +429,7 @@ The runtime exposes two public APIs that consumers can import directly. Everythi
 A drop-in replacement for the manual `useState + useRef + useEffect + IntersectionObserver + React.lazy` pattern most apps end up writing to defer a below-fold section.
 
 ```tsx
-import { NuggetLazy } from "lazy-handler-webpack-plugin/runtime";
+import { NuggetLazy } from "lazy-handler-plugin/runtime";
 
 <NuggetLazy
   load={() => import("./Home.BelowFold")}
@@ -377,7 +447,7 @@ SSR-safe: on the server it renders the sentinel placeholder; hydration matches; 
 Subscribe to failed nugget loads — typically for telemetry / error reporting. The runtime retries once after 500 ms before declaring a definitive failure; the listener fires on both the initial failure (`willRetry: true`) and the final one (`willRetry: false`).
 
 ```ts
-import { onNuggetLoadError } from "lazy-handler-webpack-plugin/runtime";
+import { onNuggetLoadError } from "lazy-handler-plugin/runtime";
 
 const unsubscribe = onNuggetLoadError(({ id, error, willRetry }) => {
   if (willRetry) return; // skip transient blips
@@ -406,34 +476,41 @@ The runtime also dispatches a `nugget:load-error` `CustomEvent` on `window` with
 
 The following are known sharp edges in 0.1.0. They are *not* bugs to file — they're choices we made to keep the loader small and predictable. We'll revisit them as the API stabilizes.
 
-1. **Webpack 5 + React 18 only.** No Rollup / Vite / esbuild adapter; no Webpack 4. React 17 is untested.
+1. **React 18 only.** React 17 is untested. esbuild has no adapter (it doesn't expose the transform-pipeline hooks the loader needs).
 2. **JSX spread props aren't extracted.** The loader matches `JSXAttribute` nodes — `<button {...handlers} />` slips past it. Name handlers explicitly on the element to make them extractable.
-3. **Captures are always read at click time, not bind time.** Object / array / function captures flow through the per-component scope registry and resolve to whatever was registered on the most recent render. If your handler's correctness depends on the *original* identity of a captured value, this plugin is the wrong tool — wrap that value in a `useRef` and read `.current` yourself.
-4. **Handlers must live inside named React components.** The loader injects `useRef` / `useEffect` into the enclosing function. If that function isn't a React component (e.g. a render helper called like a plain function), the injected hooks will throw "Invalid hook call" at runtime. Components that follow the standard `function Foo() { … }` / `const Foo = () => { … }` shape are safe.
-5. **Persistent webpack caching can stale-out the registry.** The plugin's source registry is rebuilt at each compile; if webpack restores a JSX module from its `cache.type: "filesystem"` store without re-running the loader, the `nugget://...` import in that module has no registered source and the build will fail with `No registered source for "..."`. Until we persist the registry alongside webpack's module cache, set `cache: false` in your webpack config (or disable Next.js' build cache between releases) for builds that include this plugin.
-6. **Default-disabled in development.** `NODE_ENV === "development"` short-circuits the loader so HMR stays fast. Force-enable with `disabled: false` if you specifically want to test the extraction path locally.
-7. **`preventDefault` hoisting only fires for the first statements of the handler body.** Branched or nested `e.preventDefault()` calls are left in place inside the handler chunk — which means they execute *after* the async fetch resolves. If sync prevention matters, keep the call as the first line of the handler.
-8. **Destructuring patterns in handler params disable hoisting.** `onClick={({ target }) => { … }}` works, but a `preventDefault` inside it won't be hoisted. Use `onClick={(e) => { e.preventDefault(); … }}` for the hoist to apply.
+3. **`useCallback`-wrapped handlers aren't extracted.** The named-handler path looks for a function-shaped initializer (`const x = () => ...` or `function x() {...}`); a `CallExpression` wrapping the function — `const x = useCallback(() => ..., [])` — isn't recognized. Unwrap the function or accept that this handler won't be lazy.
+4. **Captures are always read at click time, not bind time.** Object / array / function captures flow through the per-component scope registry and resolve to whatever was registered on the most recent render. If your handler's correctness depends on the *original* identity of a captured value, this plugin is the wrong tool — wrap that value in a `useRef` and read `.current` yourself.
+5. **Handlers must live inside named React components.** The loader injects `useRef` / `useEffect` into the enclosing function. If that function isn't a React component (e.g. a render helper called like a plain function), the injected hooks will throw "Invalid hook call" at runtime. Components that follow the standard `function Foo() { … }` / `const Foo = () => { … }` shape are safe.
+6. **Persistent bundler caching can stale-out the registry.** The plugin's source registry is rebuilt at each compile; if webpack/Vite restores a JSX module from its filesystem cache without re-running the loader, the `nugget://...` import in that module has no registered source and the build will fail with `No registered source for "..."`. Until we persist the registry alongside the bundler's module cache, disable filesystem caching (`cache: false` in webpack, drop `node_modules/.vite` between Vite builds) for builds that include this plugin.
+7. **Default-disabled in development.** For the webpack adapter, `NODE_ENV === "development"` short-circuits the loader so HMR stays fast. The Vite adapter is always disabled in `vite dev` (esbuild path) and active in `vite build`. Force-enable webpack with `disabled: false` if you specifically want to test extraction locally.
+8. **`preventDefault` hoisting only fires for the first statements of the handler body.** Branched or nested `e.preventDefault()` calls are left in place inside the handler chunk — which means they execute *after* the async fetch resolves. If sync prevention matters, keep the call as the first line of the handler.
+9. **Destructuring patterns in handler params disable hoisting.** `onClick={({ target }) => { … }}` works, but a `preventDefault` inside it won't be hoisted. Use `onClick={(e) => { e.preventDefault(); … }}` for the hoist to apply.
 
 ---
 
 ## Project Structure
 
 ```
-lazy-handler-webpack-plugin/
+lazy-handler-plugin/
 ├── src/
-│   ├── plugins/
-│   │   ├── LazyHandlerPlugin.js   # Tapable plugin — Webpack integration
-│   │   ├── nugget-loader.js         # Babel AST transform — handler extraction
-│   │   └── nuggetRegistry.js        # Build-time handler registry
+│   ├── core/                            # bundler-agnostic
+│   │   ├── transform.js                 # Babel AST transform — handler extraction
+│   │   └── registry.js                  # build-time nugget registry (singleton)
+│   ├── adapters/
+│   │   ├── webpack/
+│   │   │   ├── index.js                 # Tapable plugin — Webpack integration
+│   │   │   └── loader.js                # thin loader shim → core.transform
+│   │   └── rollup/
+│   │       └── index.js                 # Rollup/Vite plugin → core.transform
 │   └── runtime/
-│       ├── nugget-runtime.js        # Browser runtime (~600 bytes gzipped)
-│       └── nugget-runtime.d.ts      # Public typings for NuggetLazy / onNuggetLoadError
+│       ├── nugget-runtime.js            # Browser runtime (~600 bytes gzipped)
+│       └── nugget-runtime.d.ts          # Public typings (NuggetLazy / onNuggetLoadError)
 ├── examples/
-│   ├── test-react-app/              # Custom-webpack React 18 demo
-│   ├── test-nextjs-app/             # Next.js 14 App Router demo
-│   ├── webpack.config.js            # Minimal webpack config snippet
-│   └── SearchBox.jsx                # Inline before/after of the transform
+│   ├── test-react-app/                  # Custom-webpack React 18 demo
+│   ├── test-nextjs-app/                 # Next.js 14 App Router demo
+│   ├── test-vite-app/                   # Vite 5 + React 18 demo
+│   ├── webpack.config.js                # Minimal webpack config snippet
+│   └── SearchBox.jsx                    # Inline before/after of the transform
 └── package.json
 ```
 

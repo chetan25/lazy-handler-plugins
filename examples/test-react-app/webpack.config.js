@@ -1,6 +1,6 @@
 const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
-const LazyHandlerPlugin = require("lazy-handler-webpack-plugin");
+const LazyHandlerPlugin = require("lazy-handler-plugin");
 
 module.exports = {
   entry: "./src/index.tsx",

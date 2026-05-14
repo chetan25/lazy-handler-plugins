@@ -1,15 +1,19 @@
 {
-  "name": "lazy-handler-webpack-plugin",
+  "name": "lazy-handler-plugin",
   "version": "0.1.0",
-  "description": "Webpack plugin that auto-extracts JSX event handlers into lazy-loaded micro-chunks. Ships zero handler JS until the user triggers an interaction.",
-  "main": "src/plugins/LazyHandlerPlugin.js",
+  "description": "Webpack/Rollup/Vite plugin that auto-extracts JSX event handlers into lazy-loaded micro-chunks. Ships zero handler JS until the user triggers an interaction.",
+  "main": "src/adapters/webpack/index.js",
   "exports": {
-    ".": "./src/plugins/LazyHandlerPlugin.js",
+    ".": "./src/adapters/webpack/index.js",
+    "./webpack": "./src/adapters/webpack/index.js",
+    "./rollup": "./src/adapters/rollup/index.js",
+    "./vite": "./src/adapters/rollup/index.js",
     "./runtime": "./src/runtime/nugget-runtime.js",
-    "./loader": "./src/plugins/nugget-loader.js"
+    "./loader": "./src/adapters/webpack/loader.js"
   },
   "files": [
-    "src/plugins",
+    "src/core",
+    "src/adapters",
     "src/runtime",
     "README.md",
     "LICENSE"
@@ -20,6 +24,8 @@
   },
   "keywords": [
     "webpack",
+    "rollup",
+    "vite",
     "plugin",
     "code-splitting",
     "lazy-loading",
@@ -29,11 +35,15 @@
     "bundle-size"
   ],
   "peerDependencies": {
-    "webpack": ">=5.0.0",
     "@babel/parser": ">=7.0.0",
     "@babel/traverse": ">=7.0.0",
     "@babel/generator": ">=7.0.0",
     "@babel/types": ">=7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "webpack": { "optional": true },
+    "rollup": { "optional": true },
+    "vite": { "optional": true }
   },
   "devDependencies": {
     "webpack": "^5.88.0",

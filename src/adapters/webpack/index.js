@@ -1,7 +1,7 @@
-// src/plugins/LazyHandlerPlugin.js
+// src/adapters/webpack/index.js
 "use strict";
 
-const nuggetRegistry = require("./nuggetRegistry");
+const nuggetRegistry = require("../../core/registry");
 
 const DEFAULT_OPTIONS = {
   // JSX event prop names to auto-extract
@@ -35,12 +35,15 @@ class LazyHandlerPlugin {
     const { EntryPlugin, NormalModule, sources, DefinePlugin } = webpack;
 
     // Inject build-time constants into the runtime so it picks up the
-    // user-configured directory and below-fold lookahead. DefinePlugin
-    // substitutes literals at build time, so there is no runtime lookup
-    // cost.
+    // user-configured directory, below-fold lookahead, and publicPath.
+    // DefinePlugin substitutes literals at build time, so there is no
+    // runtime lookup cost. __NUGGET_BASE__ is mapped to webpack's own
+    // __webpack_public_path__ rewriter — an *unquoted* expression so the
+    // value is the runtime publicPath, not the string "__webpack_public_path__".
     new DefinePlugin({
       __NUGGET_DIR__: JSON.stringify(nuggetDir),
       __NUGGET_ROOT_MARGIN__: JSON.stringify(`${belowFoldThreshold}px`),
+      __NUGGET_BASE__: "__webpack_public_path__",
     }).apply(compiler);
 
     // ── Clear registry at the start of every build ─────────────────────────
@@ -56,7 +59,7 @@ class LazyHandlerPlugin {
       enforce: "pre",
       use: [
         {
-          loader: require.resolve("./nugget-loader"),
+          loader: require.resolve("./loader"),
           options: {
             eventProps,
             minHandlerLines: this.options.minHandlerLines,
@@ -69,7 +72,7 @@ class LazyHandlerPlugin {
     if (injectRuntime) {
       new EntryPlugin(
         compiler.context,
-        require.resolve("../runtime/nugget-runtime"),
+        require.resolve("../../runtime/nugget-runtime"),
         { name: undefined } // attach to existing entry rather than creating a new chunk
       ).apply(compiler);
     }

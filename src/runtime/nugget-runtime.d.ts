@@ -1,4 +1,4 @@
-// Public typings for lazy-handler-webpack-plugin/runtime.
+// Public typings for lazy-handler-plugin/runtime.
 //
 // The underscore-prefixed exports (__nuggetProxy, __nuggetCreateScope,
 // __nuggetDestroyScope, __nuggetRegisterRef, __nuggetDeref, __nuggetHasScope)

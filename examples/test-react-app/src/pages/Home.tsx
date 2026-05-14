@@ -51,6 +51,18 @@ export default function Home() {
   const [shouldMountBelowFold, setShouldMountBelowFold] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Named-handler test (const-arrow form) ──────────────────────────────
+  // `handleReset` is referenced ONLY from the JSX onClick below. The plugin
+  // should extract it into its own nugget and remove this declaration from
+  // the main bundle.
+  const handleReset = () => {
+    console.log("[home] named handler — resetting state");
+    setPosts([]);
+    setPostsError(null);
+    setLastFetchedAt(null);
+    setMdHtml("");
+  };
+
   useEffect(() => {
     if (!sentinelRef.current || shouldMountBelowFold) return;
     const observer = new IntersectionObserver(
@@ -122,6 +134,9 @@ export default function Home() {
         >
           Sort posts ({sortDir === "asc" ? "A → Z" : "Z → A"})
         </button>
+
+        {/* Named-handler test — see `handleReset` declared above */}
+        <button onClick={handleReset}>Reset (named handler)</button>
 
         {postsError && <p className="error">Error: {postsError}</p>}
         {lastFetchedAt && (

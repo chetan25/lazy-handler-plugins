@@ -1,4 +1,4 @@
-const LazyHandlerPlugin = require("lazy-handler-webpack-plugin");
+const LazyHandlerPlugin = require("lazy-handler-plugin");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

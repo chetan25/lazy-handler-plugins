@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { NuggetLazy } from "lazy-handler-webpack-plugin/runtime";
+import { NuggetLazy } from "lazy-handler-plugin/runtime";
 // `marked` is imported as a normal static import at the top of the page.
 // The plugin sees that it's only referenced inside an extracted handler,
 // re-imports it inside the nugget chunk, and prunes the static import here
@@ -20,6 +20,19 @@ export default function Home() {
     "# Hello\n\nThis renders **markdown** via `marked`. Try editing!\n\n- list item\n- another\n\n```js\nconst x = 1;\n```"
   );
   const [mdHtml, setMdHtml] = useState("");
+
+  // ── Named-handler test (function-declaration form) ─────────────────────
+  // Exercises the FunctionDeclaration branch of the plugin's named-ref
+  // extraction (the const-arrow form is tested in the React/Vite test
+  // apps). The plugin should extract this function, route it to its own
+  // nugget chunk, and remove the declaration from the main bundle.
+  function handleReset() {
+    console.log("[home] named handler — resetting state");
+    setPosts([]);
+    setPostsError(null);
+    setLastFetchedAt(null);
+    setMdHtml("");
+  }
 
   return (
     <main className="page">
@@ -78,6 +91,10 @@ export default function Home() {
         >
           Sort posts ({sortDir === "asc" ? "A → Z" : "Z → A"})
         </button>
+
+        {/* Named-handler test — `handleReset` is declared above as a
+            `function` statement, exercising the FunctionDeclaration path. */}
+        <button onClick={handleReset}>Reset (named handler)</button>
 
         {postsError && <p className="error">Error: {postsError}</p>}
         {lastFetchedAt && (

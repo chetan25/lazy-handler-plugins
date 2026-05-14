@@ -1,6 +1,6 @@
 // examples/webpack.config.js
 const path = require("path");
-const LazyHandlerPlugin = require("lazy-handler-webpack-plugin");
+const LazyHandlerPlugin = require("lazy-handler-plugin");
 
 module.exports = {
   entry: "./src/index.jsx",

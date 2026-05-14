@@ -1,6 +1,7 @@
-// src/plugins/nuggetRegistry.js
-// Shared singleton between the loader and plugin during a single compilation.
-// Cleared at the start of each build via compiler.hooks.beforeRun.
+// src/core/registry.js
+// Bundler-agnostic registry shared between the core transform and each adapter
+// during a single compilation. Cleared at the start of each build by the
+// adapter (webpack: compiler.hooks.beforeRun; rollup: buildStart).
 //
 // Two indexes are maintained:
 //   - byId       → keyed by handler id ("nugget_onClick_a3f7c9b1")

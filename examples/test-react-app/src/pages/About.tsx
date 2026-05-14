@@ -7,7 +7,7 @@ export default function About() {
   return (
     <main className="page">
       <h1>About</h1>
-      <p>This is a minimal React + TypeScript app built with a custom webpack 5 config. It is meant to be the test bed for the <code>lazy-handler-webpack-plugin</code> plugin.</p>
+      <p>This is a minimal React + TypeScript app built with a custom webpack 5 config. It is meant to be the test bed for the <code>lazy-handler-plugin</code> plugin.</p>
 
       <button
         onClick={() => {

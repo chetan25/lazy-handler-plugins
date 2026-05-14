@@ -286,24 +286,23 @@ if (typeof window !== "undefined" && typeof IntersectionObserver !== "undefined"
         }
 
         // Emit a modulepreload link — browser fetches but doesn't execute.
-        // The URL is publicPath + nuggetDir + chunkId.js. The publicPath is
-        // resolved at runtime so the plugin works in apps mounted under a
-        // non-root path (Next.js serves at "/_next/", Vite previews at "/",
-        // etc.). The nuggetDir is injected at build time via DefinePlugin —
-        // we read it through a const so DefinePlugin can replace it.
+        // The URL is base + nuggetDir + chunkId.js. Both base and nuggetDir
+        // are injected at build time by the adapter (webpack: DefinePlugin;
+        // rollup/vite: replace/define) so this code stays bundler-neutral.
+        //   - __NUGGET_BASE__  : publicPath equivalent (webpack maps it to
+        //                        __webpack_public_path__; vite to
+        //                        import.meta.env.BASE_URL).
+        //   - __NUGGET_DIR__   : nugget chunk output directory (e.g. "static/nuggets").
         // eslint-disable-next-line no-undef
-        const NUGGET_DIR = typeof __NUGGET_DIR__ !== "undefined"
-          // eslint-disable-next-line no-undef
-          ? __NUGGET_DIR__
-          : "static/nuggets";
-        const base =
-          typeof __webpack_public_path__ !== "undefined"
-            ? __webpack_public_path__
-            : "/";
+        const NUGGET_DIR = typeof __NUGGET_DIR__ !== "undefined" ? __NUGGET_DIR__ : "static/nuggets";
+        // eslint-disable-next-line no-undef
+        const base = typeof __NUGGET_BASE__ !== "undefined" ? __NUGGET_BASE__ : "/";
+        const baseStr = String(base || "/");
+        const baseTrimmed = baseStr.endsWith("/") ? baseStr : baseStr + "/";
         const dir = NUGGET_DIR.replace(/^\/+|\/+$/g, "");
         const link = document.createElement("link");
         link.rel = "modulepreload";
-        link.href = base + dir + "/" + chunkId + ".js";
+        link.href = baseTrimmed + dir + "/" + chunkId + ".js";
         document.head.appendChild(link);
         observer.unobserve(entry.target);
       }
@@ -341,7 +340,7 @@ if (typeof window !== "undefined" && typeof IntersectionObserver !== "undefined"
 // this module is framework-neutral.
 //
 // Usage:
-//   import { NuggetLazy } from "lazy-handler-webpack-plugin/runtime";
+//   import { NuggetLazy } from "lazy-handler-plugin/runtime";
 //   <NuggetLazy
 //     load={() => import("./Home.BelowFold")}
 //     props={{ posts, setPosts }}

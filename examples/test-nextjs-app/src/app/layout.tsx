@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Test Next.js App — Lazy Handler Plugin",
-  description: "Next.js test bed for lazy-handler-webpack-plugin",
+  description: "Next.js test bed for lazy-handler-plugin",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

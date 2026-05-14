@@ -9,7 +9,7 @@ export default function About() {
   return (
     <main className="page">
       <h1>About</h1>
-      <p>This is a minimal Next.js 14 (App Router) + TypeScript app. It is meant to be the test bed for the <code>lazy-handler-webpack-plugin</code> plugin via <code>next.config.js</code> webpack customization.</p>
+      <p>This is a minimal Next.js 14 (App Router) + TypeScript app. It is meant to be the test bed for the <code>lazy-handler-plugin</code> plugin via <code>next.config.js</code> webpack customization.</p>
 
       <button
         onClick={() => {
