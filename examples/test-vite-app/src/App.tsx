@@ -3,9 +3,19 @@
 // imported at the top normally, and the plugin should move it into the
 // nugget chunk because it's only referenced inside an extracted handler.
 import { useState } from "react";
+// Exercise the type-only import path: `Tokens` is `import type` from the
+// same package whose value import (`marked`) is captured inside a handler.
+// The plugin must NOT pull `Tokens` into the nugget chunk's value imports,
+// otherwise TS chokes with "Import type cannot combine a type only default
+// with value named import."
 import { marked } from "marked";
+import type { Tokens } from "marked";
+import HandlerPatterns from "./HandlerPatterns";
 
 type Post = { id: number; title: string; body: string };
+// Reference Tokens in a type-only position so it survives the type checker
+// without ever becoming a value capture.
+type RenderedToken = Tokens.Generic;
 
 export default function App() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -29,6 +39,22 @@ export default function App() {
     setPostsError(null);
     setLastFetchedAt(null);
     setMdHtml("");
+  };
+
+  // ── Dual-event named handler (regression test) ─────────────────────────
+  // `handleAny` is referenced from TWO different JSX event props on the same
+  // element. The plugin's `allReferencesAreEventProps` check should accept
+  // this (both onClick and onMouseEnter are in eventProps), and the two
+  // JSXAttribute rewrites should each point to the SAME nugget chunk (hash
+  // by identifier name + filePath, not prop name). Both event handlers must
+  // fire correctly at runtime — bug originally reported as "onMouseEnter
+  // doesn't fire and crashes the app".
+  const [dualCount, setDualCount] = useState(0);
+  const [dualLastEvent, setDualLastEvent] = useState<string>("none");
+  const handleAny = (e: React.SyntheticEvent) => {
+    console.log(`[dual] event ${e.type} fired`);
+    setDualLastEvent(e.type);
+    setDualCount((c) => c + 1);
   };
 
   return (
@@ -122,6 +148,21 @@ export default function App() {
         still extract it. Open DevTools → Network and click it once.
       </p>
       <button onClick={handleReset}>Reset all state</button>
+
+      <hr />
+      <h2>Dual-event named handler (regression)</h2>
+      <p>
+        Same <code>handleAny</code> bound to both <code>onClick</code> AND
+        <code>onMouseEnter</code> on one element. Both events must fire and
+        share a single nugget chunk. Last event: <strong>{dualLastEvent}</strong>{" "}
+        · invocations: <strong>{dualCount}</strong>.
+      </p>
+      <button onClick={handleAny} onMouseEnter={handleAny}>
+        Click or hover (named, dual-event)
+      </button>
+
+      <hr />
+      <HandlerPatterns />
     </main>
   );
 }

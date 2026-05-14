@@ -13,6 +13,11 @@ import { useCounter } from "../store/counter";
 // useContext + provider lives one level up. Captured as a local binding.
 import { useAppContext } from "../context/AppContext";
 
+// Comprehensive matrix of every event-handler shape the plugin supports
+// (extracted) and intentionally skips (left inline). See HandlerPatterns.tsx
+// for the per-pattern marker conventions used to verify the build output.
+import HandlerPatterns from "../HandlerPatterns";
+
 type Post = {
   id: number;
   userId: number;
@@ -305,6 +310,8 @@ export default function Home() {
           viewport. Open DevTools → Network to watch the chunk arrive.
         </p>
       </section>
+
+      <HandlerPatterns />
 
       <section className="filler">
         <p>spacer — keep scrolling</p>

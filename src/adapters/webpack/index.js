@@ -47,7 +47,14 @@ class LazyHandlerPlugin {
     }).apply(compiler);
 
     // ── Clear registry at the start of every build ─────────────────────────
+    // beforeRun fires once for a one-shot build. watchRun fires on every
+    // incremental rebuild in dev/--watch mode, so we hook both. Without
+    // watchRun, the in-memory registry would grow unbounded as edits
+    // accumulate over a long dev session.
     compiler.hooks.beforeRun.tap("LazyHandlerPlugin", () => {
+      nuggetRegistry.clear();
+    });
+    compiler.hooks.watchRun.tap("LazyHandlerPlugin", () => {
       nuggetRegistry.clear();
     });
 

@@ -35,9 +35,28 @@ const DEFAULT_OPTIONS = {
 };
 
 // Rollup convention for virtual modules: prefix with a null byte so no
-// resolver tries to re-handle the id later in the plugin chain. We strip
-// it again in `load` to recover the chunk name.
+// resolver tries to re-handle the id later in the plugin chain.
+//
+// IMPORTANT: append a `.js` suffix to the virtual id. Without it:
+//   * Rollup's chunk-emit path complains when computing default chunk
+//     filenames for an extensionless facade.
+//   * Vite's esbuild-driven import analyzer treats the module as an unknown
+//     asset and skips parsing its source — bare-string `import` lines in
+//     the nugget chunk go un-resolved and references to "lazy-handler-
+//     plugin/runtime" or to the user's relative deps fail to bind.
+// Adding `.js` makes the id look like a real JS module to every downstream
+// consumer; we strip both the prefix and the suffix in load() to recover
+// the chunk name we registered.
 const VIRTUAL_PREFIX = "\0nugget:";
+const VIRTUAL_SUFFIX = ".js";
+
+function virtualIdFor(chunkName) {
+  return VIRTUAL_PREFIX + chunkName + VIRTUAL_SUFFIX;
+}
+
+function chunkNameFromVirtualId(id) {
+  return id.slice(VIRTUAL_PREFIX.length, id.length - VIRTUAL_SUFFIX.length);
+}
 
 function isJsxLike(id) {
   // Strip query strings (Vite appends ?vue-style ones, e.g. ?import).
@@ -52,7 +71,6 @@ function isUserCode(id) {
 module.exports = function lazyHandlerRollup(userOptions = {}) {
   const options = { ...DEFAULT_OPTIONS, ...userOptions };
   let isViteDevServer = false;
-  let isProduction = true;
 
   return {
     name: "lazy-handler-plugin",
@@ -61,19 +79,28 @@ module.exports = function lazyHandlerRollup(userOptions = {}) {
     enforce: "pre",
 
     // ── Vite-only hook: detect dev vs build, inject defines ────────────────
-    // Pure Rollup ignores this hook silently.
+    // Pure Rollup ignores this hook silently. We track isViteDevServer for
+    // diagnostics only — the `disabled` option is the sole gate on whether
+    // extraction runs.
     config(config, env) {
       isViteDevServer = env && env.command === "serve";
-      isProduction = !isViteDevServer;
 
       // Make build-time constants available to the runtime. Vite's `define`
-      // does a straight text replacement, so we pass JS-expression strings
-      // — the resulting source then references valid Vite globals
-      // (`import.meta.env.BASE_URL`) or static literals.
+      // does a straight text replacement.
+      //
+      // For the public base path we resolve `config.base` (or default "/")
+      // and substitute a string literal — NOT `import.meta.env.BASE_URL`.
+      // The latter would feed back into Vite's env-replacement pass, but
+      // Vite skips env replacement for files served from `node_modules`,
+      // and our runtime lives there (via the package's symlink). The
+      // un-replaced `import.meta.env.BASE_URL` then crashed at runtime
+      // with "Cannot read properties of undefined (reading 'BASE_URL')"
+      // because `import.meta.env` was undefined in the preview bundle.
+      const resolvedBase = (config && config.base) || "/";
       const define = {
         __NUGGET_DIR__: JSON.stringify(options.nuggetDir),
         __NUGGET_ROOT_MARGIN__: JSON.stringify(`${options.belowFoldThreshold}px`),
-        __NUGGET_BASE__: "import.meta.env.BASE_URL",
+        __NUGGET_BASE__: JSON.stringify(resolvedBase),
       };
 
       return {
@@ -89,12 +116,11 @@ module.exports = function lazyHandlerRollup(userOptions = {}) {
               // Route nugget chunks to nuggetDir/<chunkName>.js so the
               // runtime's modulepreload URL resolves. We match by the
               // facade module id rather than chunk name because Rollup
-              // mangles virtual-id names (\0nugget:nugget-abc becomes
-              // _nugget_nugget-abc) before chunkFileNames is called.
+              // mangles virtual-id names before chunkFileNames runs.
               chunkFileNames: (chunkInfo) => {
                 const id = chunkInfo.facadeModuleId || "";
-                if (id.startsWith(VIRTUAL_PREFIX)) {
-                  const chunkName = id.slice(VIRTUAL_PREFIX.length);
+                if (id.startsWith(VIRTUAL_PREFIX) && id.endsWith(VIRTUAL_SUFFIX)) {
+                  const chunkName = chunkNameFromVirtualId(id);
                   return `${options.nuggetDir}/${chunkName}.js`;
                 }
                 const existing =
@@ -119,17 +145,35 @@ module.exports = function lazyHandlerRollup(userOptions = {}) {
       nuggetRegistry.clear();
     },
 
+    // ── Vite HMR: drop stale registry entries for changed JSX files ────────
+    // In dev (vite serve), buildStart only fires once at server startup, so
+    // the registry would otherwise grow unbounded as edits accumulate. When
+    // a JSX/TSX file changes, drop every nugget registered against it; the
+    // re-transform that follows will re-register fresh entries with the new
+    // hashes. Other files' nuggets are left alone.
+    handleHotUpdate(ctx) {
+      if (options.disabled) return;
+      if (!isJsxLike(ctx.file)) return;
+      const registry = nuggetRegistry.getAll();
+      for (const [id, meta] of Object.entries(registry)) {
+        if (meta.sourceFile === ctx.file) {
+          nuggetRegistry.removeById(id);
+        }
+      }
+    },
+
     resolveId(id) {
       if (options.disabled) return null;
       if (!id.startsWith("nugget://")) return null;
-      // Strip the scheme and own the rest as a virtual id.
-      return VIRTUAL_PREFIX + id.slice("nugget://".length);
+      // Strip the scheme and own the rest as a `.js`-suffixed virtual id.
+      const chunkName = id.slice("nugget://".length);
+      return virtualIdFor(chunkName);
     },
 
     load(id) {
       if (options.disabled) return null;
-      if (!id.startsWith(VIRTUAL_PREFIX)) return null;
-      const chunkName = id.slice(VIRTUAL_PREFIX.length);
+      if (!id.startsWith(VIRTUAL_PREFIX) || !id.endsWith(VIRTUAL_SUFFIX)) return null;
+      const chunkName = chunkNameFromVirtualId(id);
       const meta = nuggetRegistry.getByChunk(chunkName);
       if (!meta || typeof meta.source !== "string") {
         this.error(
@@ -138,12 +182,19 @@ module.exports = function lazyHandlerRollup(userOptions = {}) {
         );
         return null;
       }
-      return { code: meta.source, map: null };
+      // moduleSideEffects: "no-treeshake" — the nugget exports a default
+      // function the bundler can't see being called (it's reached only via
+      // dynamic import at runtime). Without this hint Rollup may treat the
+      // module as side-effect-free, prune unreferenced helpers it imports,
+      // and produce a stub chunk. Forcing inclusion keeps the body intact.
+      return { code: meta.source, map: null, moduleSideEffects: "no-treeshake" };
     },
 
     transform(code, id) {
+      // `disabled` is the only gate. Vite users who want fast HMR can pass
+      // `disabled: command === 'serve'` from their vite.config; users who
+      // want extraction in dev (parity testing, profiling) leave it off.
       if (options.disabled) return null;
-      if (isViteDevServer) return null;
       if (!isJsxLike(id) || !isUserCode(id)) return null;
 
       const filePath = id.split("?")[0];

@@ -9,6 +9,9 @@ import { NuggetLazy } from "lazy-handler-plugin/runtime";
 import { marked } from "marked";
 import type { Post } from "./Home.BelowFold";
 
+// Comprehensive matrix of event-handler shapes (extracted + skipped).
+import HandlerPatterns from "./HandlerPatterns";
+
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
@@ -161,6 +164,8 @@ export default function Home() {
           the <code>NuggetLazy</code> sentinel enters the viewport.
         </p>
       </section>
+
+      <HandlerPatterns />
 
       <section className="filler">
         <p>spacer — keep scrolling</p>

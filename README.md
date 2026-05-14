@@ -249,11 +249,52 @@ A complete, runnable Vite example lives at
 | `injectRuntime` | `boolean` | `true` | Auto-inject the runtime into the entry bundle |
 | `belowFoldThreshold` | `number` | `600` | Pixel offset for below-fold detection |
 | `nuggetDir` | `string` | `"static/nuggets"` | Output path for nugget chunks (must match your `output.chunkFilename` mapping) |
-| `disabled` | `boolean` | `NODE_ENV === "development"` | Disable entirely (fast HMR in dev) |
+| `disabled` | `boolean` | webpack: `NODE_ENV === "development"`  ·  Vite/Rollup: `false` | Skip extraction entirely. See [Development mode](#development-mode). |
 
 The full default `eventProps` list is `onClick, onChange, onSubmit, onBlur,
 onFocus, onKeyDown, onKeyUp, onMouseEnter, onMouseLeave, onScroll,
 onPointerDown, onDrop, onDragStart`. Pass an explicit array to narrow it.
+
+---
+
+## Development mode
+
+The plugin works in dev for both bundlers, but the **defaults differ on purpose** because dev priorities differ (fast HMR vs production-parity testing).
+
+### Behavior matrix
+
+| Bundler | Default in dev | How to flip it |
+|---|---|---|
+| Webpack 5 (`webpack-dev-server`, `webpack --watch`) | **Disabled** — handlers ship inline, HMR is fast. | Pass `disabled: false` to the plugin constructor to extract in dev too. |
+| Vite 5 (`vite dev`) | **Enabled** — handlers are extracted, dynamic-imported, and served by the Vite dev server as virtual modules. | Pass `disabled: command === 'serve'` from your `vite.config.ts` to skip extraction during `vite dev` while keeping it on for `vite build`. |
+| Rollup 4 (`rollup -w`) | **Enabled** — same path as Vite production builds. | Pass `disabled: process.env.NODE_ENV !== 'production'` if you want to opt out. |
+
+### How it works under the hood
+
+In dev:
+- The **Babel transform** runs on every JSX/TSX module the bundler asks us to process — same as production. Handlers get rewritten to proxy stubs; the registry is filled as transforms happen.
+- For Vite, the dev server resolves our null-byte virtual id (`\0nugget:nugget-abc.js`) and exposes it at `/@id/__x00__nugget:nugget-abc.js`. The browser fetches it on first interaction.
+- For webpack with `disabled: false`, `webpack-dev-server` serves the emitted chunk from its in-memory filesystem at `<publicPath>/static/nuggets/nugget-abc.js`.
+
+On rebuild / HMR:
+- **Webpack**: `compiler.hooks.watchRun` re-clears the registry, the loader re-runs on changed files, fresh hashes register, dev-server hot-replaces.
+- **Vite**: `handleHotUpdate` evicts the changed file's registry entries, then `transform` re-runs and re-registers. Other files' nuggets are untouched.
+
+### When to enable dev extraction
+
+Lean toward leaving it **on for Vite** (the default) and **off for webpack** (the default) unless you have a specific reason to flip either:
+
+- **Turn it on in webpack dev** when you're profiling click-to-first-paint latency, debugging the runtime's `__nuggetProxy` / `IntersectionObserver`, or testing in StrictMode and want production-shape modules served locally.
+- **Turn it off in Vite dev** when you're iterating heavily on handler bodies — see the HMR caveat below.
+
+### Caveats
+
+These apply to either bundler when extraction is **on in dev**:
+
+1. **Click latency on first interaction.** Each handler's first click waits for a single small chunk to fetch from the dev server. On localhost this is typically <10 ms; on a throttled-network DevTools profile it can be visible.
+2. **HMR + hash-stable chunk names.** When you edit a handler's body, its content hash changes. The proxy stub now points at a *new* virtual id. The registry's old entry is dropped (Vite: via `handleHotUpdate`; webpack: via `watchRun`). The browser may briefly hold the old import URL after HMR if React's reconciler kept the old element — first click after save can show a 404 in the console; full reload always clears it.
+3. **Source-map indirection.** Stepping into a handler from DevTools lands you in the synthesized nugget chunk (with the original body text, but no JSX attribute context). The original JSX `onClick={…}` site is replaced by the proxy stub. If you're chasing a handler bug, set a breakpoint in the *nugget chunk* not the source file.
+4. **Persistent caching can stale-out the registry.** Webpack's `cache: { type: 'filesystem' }` and Vite's `node_modules/.vite` can skip the loader/transform on cached modules. Without the transform running, the registry has no entry for that file's `nugget://…` import, and the build fails with `No registered source for "…"`. Workaround: keep filesystem caching off when dev extraction is on, or delete the cache between sessions.
 
 ---
 
@@ -482,7 +523,7 @@ The following are known sharp edges in 0.1.0. They are *not* bugs to file — th
 4. **Captures are always read at click time, not bind time.** Object / array / function captures flow through the per-component scope registry and resolve to whatever was registered on the most recent render. If your handler's correctness depends on the *original* identity of a captured value, this plugin is the wrong tool — wrap that value in a `useRef` and read `.current` yourself.
 5. **Handlers must live inside named React components.** The loader injects `useRef` / `useEffect` into the enclosing function. If that function isn't a React component (e.g. a render helper called like a plain function), the injected hooks will throw "Invalid hook call" at runtime. Components that follow the standard `function Foo() { … }` / `const Foo = () => { … }` shape are safe.
 6. **Persistent bundler caching can stale-out the registry.** The plugin's source registry is rebuilt at each compile; if webpack/Vite restores a JSX module from its filesystem cache without re-running the loader, the `nugget://...` import in that module has no registered source and the build will fail with `No registered source for "..."`. Until we persist the registry alongside the bundler's module cache, disable filesystem caching (`cache: false` in webpack, drop `node_modules/.vite` between Vite builds) for builds that include this plugin.
-7. **Default-disabled in development.** For the webpack adapter, `NODE_ENV === "development"` short-circuits the loader so HMR stays fast. The Vite adapter is always disabled in `vite dev` (esbuild path) and active in `vite build`. Force-enable webpack with `disabled: false` if you specifically want to test extraction locally.
+7. **Default behaviour in dev differs by bundler.** Webpack is off by default in `NODE_ENV === "development"`; Vite/Rollup are on by default in `vite dev` and `rollup -w`. Both are configurable via `disabled`. See [Development mode](#development-mode) for caveats and recipes.
 8. **`preventDefault` hoisting only fires for the first statements of the handler body.** Branched or nested `e.preventDefault()` calls are left in place inside the handler chunk — which means they execute *after* the async fetch resolves. If sync prevention matters, keep the call as the first line of the handler.
 9. **Destructuring patterns in handler params disable hoisting.** `onClick={({ target }) => { … }}` works, but a `preventDefault` inside it won't be hoisted. Use `onClick={(e) => { e.preventDefault(); … }}` for the hoist to apply.
 

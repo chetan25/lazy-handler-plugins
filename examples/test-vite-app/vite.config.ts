@@ -8,7 +8,11 @@ import lazyHandler from "lazy-handler-plugin/vite";
 export default defineConfig({
   plugins: [
     lazyHandler({
-      eventProps: ["onClick", "onSubmit", "onChange", "onKeyDown"],
+      eventProps: [
+        "onClick", "onSubmit", "onChange", "onKeyDown", "onKeyUp",
+        "onBlur", "onFocus", "onMouseEnter", "onMouseLeave",
+        "onPointerDown", "onDrop", "onDragStart",
+      ],
       minHandlerLines: 3,
       belowFoldThreshold: 600,
       nuggetDir: "static/nuggets",

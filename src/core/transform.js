@@ -91,11 +91,24 @@ function nuggetTransform(source, filePath, options = {}) {
   const sourceFileDir = path.dirname(filePath);
   traverse(ast, {
     ImportDeclaration(nodePath) {
+      // Skip the entire declaration if it's `import type { ... }` — these
+      // names exist only in TypeScript type-position and are erased before
+      // runtime, so the nugget chunk must NOT re-import them as values.
+      // Combining a type-only default + a value-named would produce
+      // `import Foo, { bar } from "./mod"` which TS rejects with
+      // "Import type cannot combine a type only default with value named
+      //  import." If the original was a type declaration we just skip it.
+      if (nodePath.node.importKind === "type") return;
+
       const rawSource = nodePath.node.source.value;
       const resolvedSource = /^\.\.?\//.test(rawSource)
         ? path.resolve(sourceFileDir, rawSource).replace(/\\/g, "/")
         : rawSource;
       nodePath.node.specifiers.forEach((spec) => {
+        // Skip per-specifier type modifiers: `import { type Foo, bar }`.
+        // Only `bar` is a runtime value here.
+        if (spec.importKind === "type") return;
+
         let kind, imported;
         if (spec.type === "ImportDefaultSpecifier") {
           kind = "default";
@@ -606,33 +619,66 @@ function injectScopeWiring(ast, extractedHandlers, t) {
       ])
     );
 
-    // We also keep synchronous render-body register calls. They cover the
-    // narrow window between commit and the first effect tick (clicks that
-    // fire on the same task as initial paint can otherwise see no refs
-    // registered). The render-body calls reference identifiers declared
-    // later in the body (state setters, values), so they MUST go right
-    // before the return to be TDZ-safe.
-    const renderBodyRegisterCalls = [...captureNames].map((name) =>
-      t.expressionStatement(
-        t.callExpression(t.identifier("__nuggetRegisterRef"), [
-          t.identifier("__scopeId"),
-          t.stringLiteral(name),
-          t.identifier(name),
-        ])
-      )
-    );
+    // Synchronous render-body register calls cover the narrow window between
+    // commit and the first effect tick (clicks that fire on the same task as
+    // initial paint can otherwise see no refs registered). These must fire
+    // on EVERY render path that can produce JSX, so we splice them in before
+    // every ReturnStatement in the component body — not just the first one
+    // at the top level. Components with early returns, conditional renders,
+    // or branched render paths (e.g. `if (loading) return <Spinner/>; return
+    // <Main/>;`) would otherwise miss registration on whichever path didn't
+    // get the splice — the nugget's `__nuggetDeref` would then return null
+    // and the handler would no-op (the originally-reported "onMouseEnter
+    // doesn't fire" symptom).
+    //
+    // We build a fresh template per insertion site so each call site gets
+    // its own AST nodes (Babel doesn't like node identity sharing across
+    // multiple parent positions).
+    const buildRenderBodyRegisterCalls = () =>
+      [...captureNames].map((name) =>
+        t.expressionStatement(
+          t.callExpression(t.identifier("__nuggetRegisterRef"), [
+            t.identifier("__scopeId"),
+            t.stringLiteral(name),
+            t.identifier(name),
+          ])
+        )
+      );
 
-    // Hooks (useRef, useEffect) must run on every render in stable order.
-    body.body.unshift(refDecl, lazyInit, scopeIdDecl, cleanupEffect);
+    // Walk the component body for every ReturnStatement, skipping nested
+    // function scopes so we don't inject into `useCallback` arrows, JSX
+    // proxy stubs, or unrelated helpers declared inside the component.
+    const returnPaths = [];
+    fnPath.traverse({
+      Function(innerPath) {
+        innerPath.skip();
+      },
+      ReturnStatement(rp) {
+        returnPaths.push(rp);
+      },
+    });
 
-    let returnIdx = body.body.findIndex(
-      (n) => n.type === "ReturnStatement"
-    );
-    if (returnIdx === -1) returnIdx = body.body.length;
-    body.body.splice(
-      returnIdx,
-      0,
-      ...renderBodyRegisterCalls,
+    if (returnPaths.length === 0) {
+      // No top-level return found — append the calls at the body's end.
+      // Pathological (component returns undefined) but at least keeps the
+      // registry populated on render.
+      body.body.push(...buildRenderBodyRegisterCalls());
+    } else {
+      for (const rp of returnPaths) {
+        rp.insertBefore(buildRenderBodyRegisterCalls());
+      }
+    }
+
+    // Hooks (useRef, useEffect for cleanup, useEffect for re-register) must
+    // run on every render in stable order. We place ALL hooks at the top of
+    // the body — putting the register effect before each return would make
+    // it a conditional hook, which violates React's rules of hooks when the
+    // component has more than one return path.
+    body.body.unshift(
+      refDecl,
+      lazyInit,
+      scopeIdDecl,
+      cleanupEffect,
       registerEffect
     );
   }

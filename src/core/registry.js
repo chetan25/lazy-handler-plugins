@@ -31,6 +31,17 @@ module.exports = {
     return Object.fromEntries(byId.entries());
   },
 
+  /**
+   * Drop a single nugget by handler id. Used by adapters during HMR to
+   * evict entries for a file that's about to be re-transformed; the next
+   * transform pass re-registers the survivors with fresh hashes.
+   */
+  removeById(id) {
+    const meta = byId.get(id);
+    byId.delete(id);
+    if (meta && meta.chunkName) byChunk.delete(meta.chunkName);
+  },
+
   clear() {
     byId.clear();
     byChunk.clear();
