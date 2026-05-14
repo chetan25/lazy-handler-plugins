@@ -16,7 +16,8 @@ const nextConfig = {
     // Don't run during `next dev`. Handler extraction defeats HMR — the
     // plugin's own `disabled` default already covers this via NODE_ENV, but
     // we short-circuit explicitly so the rule-rewriting doesn't fight HMR.
-    if (dev) return config;
+    // NOTE: temporarily disabled for dev-mode testing.
+    // if (dev) return config;
 
     // The chunkFilename override below only applies to client output —
     // server bundles don't emit nugget-* chunks, but the loader still needs

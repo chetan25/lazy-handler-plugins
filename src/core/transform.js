@@ -3,7 +3,7 @@
 // stubs and registers the extracted source in the shared registry. Webpack,
 // Rollup, and Vite adapters all delegate to this function. The adapter is
 // responsible for serving the registered source as a virtual module
-// (`nugget://<chunkName>`) when the bundler later resolves the dynamic import
+// (`nugget:<chunkName>`) when the bundler later resolves the dynamic import
 // the proxy stub emits.
 "use strict";
 
@@ -38,7 +38,7 @@ const KNOWN_GLOBALS = new Set([
 
 /**
  * Transform a JSX/TSX module: extract inline event handlers into virtual
- * `nugget://` modules and rewrite the props to dynamic-import proxy stubs.
+ * `nugget:` modules and rewrite the props to dynamic-import proxy stubs.
  *
  * Pure function — does not depend on any bundler API. Side effect: writes
  * the extracted nugget sources to the shared `nuggetRegistry` so the
@@ -86,7 +86,7 @@ function nuggetTransform(source, filePath, options = {}) {
   // an equivalent import statement.
   //
   // Relative specifiers (./foo, ../bar) are resolved to absolute paths here.
-  // The nugget chunk's resource is a virtual `nugget://...` URL, so webpack
+  // The nugget chunk's resource is a virtual `nugget:...` URI, so webpack
   // can't resolve relatives against it — we hand it an absolute path instead.
   const sourceFileDir = path.dirname(filePath);
   traverse(ast, {
@@ -339,7 +339,15 @@ function nuggetTransform(source, filePath, options = {}) {
 
     // The webpackChunkName magic comment preserves the human-readable chunk
     // name so output.chunkFilename can route it to nuggetDir.
-    const importArg = t.stringLiteral(`nugget://${chunkName}`);
+    //
+    // Scheme is `nugget:<name>` (single colon, no `//`) — NOT `nugget://<name>`.
+    // Vite's import-analysis pre-categorises any `scheme://...` specifier as
+    // external (regex `^([a-z]+:)?\/\/`) and skips plugin resolveId entirely,
+    // which causes the dev-server browser to try fetching the literal URL and
+    // fail with an unknown-scheme / CORS error. A single colon ("scheme:opaque"
+    // per RFC 3986) avoids that path while remaining a valid URI scheme that
+    // webpack's `resolveForScheme("nugget")` still recognises.
+    const importArg = t.stringLiteral(`nugget:${chunkName}`);
     t.addComment(importArg, "leading", ` webpackChunkName: "${chunkName}" `);
 
     // Build the wrapper's parameter list. We keep the SAME identifier bindings
@@ -441,7 +449,7 @@ function nuggetTransform(source, filePath, options = {}) {
     }
 
     // Register in global registry — source is served by the plugin's
-    // readResource hook when webpack builds the virtual nugget:// module.
+    // readResource hook when webpack builds the virtual nugget: module.
     nuggetRegistry.register(id, {
       chunkName,
       sourceFile: filePath,
@@ -683,10 +691,20 @@ function injectScopeWiring(ast, extractedHandlers, t) {
     );
   }
 
-  // Ensure useRef and useEffect are imported from "react".
+  // Ensure useRef and useEffect are imported from "react" as VALUES.
+  //
+  // Skip `import type ... from "react"` declarations when searching for a
+  // host to extend. Appending value specifiers to a type-only declaration
+  // produces `import type FC, { useRef, useEffect } from "react"`, which TS
+  // rejects: "Import type cannot combine a type only default with value named
+  // import." If the only existing react import is type-only, we add a new
+  // value-import declaration alongside it instead of mutating it.
   let reactImport = ast.program.body.find(
     (n) =>
-      n.type === "ImportDeclaration" && n.source && n.source.value === "react"
+      n.type === "ImportDeclaration" &&
+      n.source &&
+      n.source.value === "react" &&
+      n.importKind !== "type"
   );
   if (!reactImport) {
     reactImport = t.importDeclaration([], t.stringLiteral("react"));
@@ -694,9 +712,14 @@ function injectScopeWiring(ast, extractedHandlers, t) {
     const insertAt = countLeadingDirectives(ast) + 1;
     ast.program.body.splice(insertAt, 0, reactImport);
   }
+  // Track only VALUE named specifiers — a per-specifier `type` modifier
+  // (`import { type useRef } from "react"`) doesn't satisfy our runtime
+  // need; we still have to add a value specifier for the same name.
   const have = new Set(
     reactImport.specifiers
-      .filter((s) => s.type === "ImportSpecifier")
+      .filter(
+        (s) => s.type === "ImportSpecifier" && s.importKind !== "type"
+      )
       .map((s) => s.imported.name)
   );
   for (const name of ["useRef", "useEffect"]) {

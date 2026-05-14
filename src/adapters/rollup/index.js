@@ -7,7 +7,7 @@
 //
 // Wires the bundler-neutral core transform into Rollup's plugin API:
 //   buildStart   → clear registry
-//   resolveId    → map `nugget://...` → virtual id we own
+//   resolveId    → map `nugget:...` → virtual id we own
 //   load         → serve registered nugget source for those ids
 //   transform    → run JSX/TSX through the core
 //   generateBundle → emit nugget-manifest.json
@@ -173,9 +173,15 @@ module.exports = function lazyHandlerRollup(userOptions = {}) {
 
     resolveId(id) {
       if (options.disabled) return null;
-      if (!id.startsWith("nugget://")) return null;
+      // Source emits `nugget:<chunkName>` (single colon, no `//`). The
+      // double-slash form `nugget://...` was previously matched by Vite's
+      // `isExternalUrl` heuristic (`^([a-z]+:)?\/\/`), which short-circuited
+      // plugin resolution and caused the dev server to ship the literal URL
+      // to the browser — fetch failed with an unknown-scheme/CORS error.
+      // The single-colon form (RFC-3986 opaque) skips that heuristic.
+      if (!id.startsWith("nugget:")) return null;
       // Strip the scheme and own the rest as a `.js`-suffixed virtual id.
-      const chunkName = id.slice("nugget://".length);
+      const chunkName = id.slice("nugget:".length);
       return virtualIdFor(chunkName);
     },
 
