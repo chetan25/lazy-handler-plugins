@@ -97,10 +97,19 @@ module.exports = function lazyHandlerRollup(userOptions = {}) {
       // with "Cannot read properties of undefined (reading 'BASE_URL')"
       // because `import.meta.env` was undefined in the preview bundle.
       const resolvedBase = (config && config.base) || "/";
+      const isDev = env && env.command === "serve";
       const define = {
         __NUGGET_DIR__: JSON.stringify(options.nuggetDir),
         __NUGGET_ROOT_MARGIN__: JSON.stringify(`${options.belowFoldThreshold}px`),
         __NUGGET_BASE__: JSON.stringify(resolvedBase),
+        // In Vite dev, nugget chunks are served only as virtual modules at
+        // `/@id/__x00__nugget:...` URLs, NOT at the production URL shape
+        // `<base><nuggetDir>/<chunkName>.js`. The IntersectionObserver
+        // preload would otherwise 404-spam the console with the prod URLs.
+        // Setting __NUGGET_DEV__ tells the runtime to skip preloading and
+        // wait for the actual click-driven dynamic import (which Vite's
+        // resolveId resolves correctly).
+        __NUGGET_DEV__: JSON.stringify(!!isDev),
       };
 
       return {

@@ -43,7 +43,19 @@ class LazyHandlerPlugin {
     new DefinePlugin({
       __NUGGET_DIR__: JSON.stringify(nuggetDir),
       __NUGGET_ROOT_MARGIN__: JSON.stringify(`${belowFoldThreshold}px`),
-      __NUGGET_BASE__: "__webpack_public_path__",
+      // Use the webpack runtime's own property reference. Unlike the bare
+      // identifier `__webpack_public_path__`, member access `__webpack_require__.p`
+      // is safe inside `typeof` checks even if the parser tagging order fails
+      // to wire up the magic identifier — `__webpack_require__` itself is
+      // always defined in webpack 5 chunks.
+      __NUGGET_BASE__: "__webpack_require__.p",
+      // True when the loader is running with `disabled: false` in a dev /
+      // watch build. The runtime uses this to skip the IntersectionObserver
+      // preload when the static-file URL shape may not match what the dev
+      // server actually serves at — webpack-dev-server's in-memory output
+      // is usually fine, but we keep the dev/prod split consistent with
+      // the Vite adapter's behavior.
+      __NUGGET_DEV__: JSON.stringify(process.env.NODE_ENV !== "production"),
     }).apply(compiler);
 
     // ── Clear registry at the start of every build ─────────────────────────

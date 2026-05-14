@@ -56,7 +56,11 @@ const nextConfig = {
 
     config.plugins.push(
       new LazyHandlerPlugin({
-        eventProps: ["onClick", "onSubmit", "onChange", "onKeyDown"],
+        eventProps: [
+          "onClick", "onSubmit", "onChange", "onKeyDown", "onKeyUp",
+          "onBlur", "onFocus", "onMouseEnter", "onMouseLeave",
+          "onPointerDown", "onDrop", "onDragStart",
+        ],
         minHandlerLines: 3,
         injectRuntime: true,
         nuggetDir: "static/nuggets",

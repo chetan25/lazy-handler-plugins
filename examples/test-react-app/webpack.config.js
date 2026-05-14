@@ -59,7 +59,9 @@ module.exports = {
       belowFoldThreshold: 600,
       nuggetDir: "static/nuggets",
       // Toggle off with NUGGET_DISABLED=1 for baseline comparison.
-      disabled: process.env.NUGGET_DISABLED === "1" || process.env.NODE_ENV === "development",
+      // Extraction is opt-out — this lets webpack-dev-server users see the
+      // plugin's behavior in development without having to flip a flag.
+      disabled: process.env.NUGGET_DISABLED === "1",
     }),
   ],
   optimization: {

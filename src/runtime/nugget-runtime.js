@@ -266,7 +266,10 @@ export function useNuggetScope(refs) {
 // Elements with data-nugget-lazy="chunkId" get their chunk preloaded
 // when they enter the viewport (200px lookahead).
 
-if (typeof window !== "undefined" && typeof IntersectionObserver !== "undefined") {
+// eslint-disable-next-line no-undef
+const NUGGET_DEV_MODE = typeof __NUGGET_DEV__ !== "undefined" && __NUGGET_DEV__;
+
+if (typeof window !== "undefined" && typeof IntersectionObserver !== "undefined" && !NUGGET_DEV_MODE) {
   // eslint-disable-next-line no-undef
   const ROOT_MARGIN = typeof __NUGGET_ROOT_MARGIN__ !== "undefined"
     // eslint-disable-next-line no-undef
