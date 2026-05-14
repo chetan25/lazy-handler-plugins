@@ -1,0 +1,47 @@
+{
+  "name": "lazy-handler-webpack-plugin",
+  "version": "0.1.0",
+  "description": "Webpack plugin that auto-extracts JSX event handlers into lazy-loaded micro-chunks. Ships zero handler JS until the user triggers an interaction.",
+  "main": "src/plugins/LazyHandlerPlugin.js",
+  "exports": {
+    ".": "./src/plugins/LazyHandlerPlugin.js",
+    "./runtime": "./src/runtime/nugget-runtime.js",
+    "./loader": "./src/plugins/nugget-loader.js"
+  },
+  "files": [
+    "src/plugins",
+    "src/runtime",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "webpack",
+    "plugin",
+    "code-splitting",
+    "lazy-loading",
+    "react",
+    "jsx",
+    "performance",
+    "bundle-size"
+  ],
+  "peerDependencies": {
+    "webpack": ">=5.0.0",
+    "@babel/parser": ">=7.0.0",
+    "@babel/traverse": ">=7.0.0",
+    "@babel/generator": ">=7.0.0",
+    "@babel/types": ">=7.0.0"
+  },
+  "devDependencies": {
+    "webpack": "^5.88.0",
+    "@babel/parser": "^7.23.0",
+    "@babel/traverse": "^7.23.0",
+    "@babel/generator": "^7.23.0",
+    "@babel/types": "^7.23.0",
+    "jest": "^29.0.0"
+  },
+  "license": "MIT"
+}

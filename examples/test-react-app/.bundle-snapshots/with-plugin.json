@@ -1,0 +1,158 @@
+{
+  "name": "with-plugin",
+  "takenAt": "2026-05-12T22:21:34.238Z",
+  "summary": {
+    "byCat": {
+      "main": {
+        "count": 2,
+        "size": 186377,
+        "gzip": 61849,
+        "phase": "initial"
+      },
+      "other": {
+        "count": 1,
+        "size": 1652,
+        "gzip": 284,
+        "phase": "artifact"
+      },
+      "html": {
+        "count": 1,
+        "size": 333,
+        "gzip": 243,
+        "phase": "initial"
+      },
+      "manifest": {
+        "count": 1,
+        "size": 3116,
+        "gzip": 383,
+        "phase": "artifact"
+      },
+      "chunks": {
+        "count": 1,
+        "size": 6004,
+        "gzip": 2143,
+        "phase": "lazy"
+      },
+      "nuggets": {
+        "count": 13,
+        "size": 48258,
+        "gzip": 16793,
+        "phase": "lazy"
+      }
+    },
+    "phaseTotals": {
+      "initial": {
+        "size": 186710,
+        "gzip": 62092
+      },
+      "lazy": {
+        "size": 54262,
+        "gzip": 18936
+      },
+      "artifact": {
+        "size": 4768,
+        "gzip": 667
+      }
+    },
+    "totalSize": 245740,
+    "totalGzip": 81695,
+    "fileCount": 19
+  },
+  "files": [
+    {
+      "path": "771.8b2e88f7.js",
+      "size": 167414,
+      "gzip": 55106
+    },
+    {
+      "path": "771.8b2e88f7.js.LICENSE.txt",
+      "size": 1652,
+      "gzip": 284
+    },
+    {
+      "path": "index.html",
+      "size": 333,
+      "gzip": 243
+    },
+    {
+      "path": "main.d9c67ef4.js",
+      "size": 18963,
+      "gzip": 6743
+    },
+    {
+      "path": "nugget-manifest.json",
+      "size": 3116,
+      "gzip": 383
+    },
+    {
+      "path": "static/chunks/below-fold.6d42dec3.js",
+      "size": 6004,
+      "gzip": 2143
+    },
+    {
+      "path": "static/nuggets/nugget-07ce6aba.js",
+      "size": 386,
+      "gzip": 298
+    },
+    {
+      "path": "static/nuggets/nugget-16075d9b.js",
+      "size": 769,
+      "gzip": 492
+    },
+    {
+      "path": "static/nuggets/nugget-1849a2ef.js",
+      "size": 345,
+      "gzip": 254
+    },
+    {
+      "path": "static/nuggets/nugget-496e7cf0.js",
+      "size": 856,
+      "gzip": 545
+    },
+    {
+      "path": "static/nuggets/nugget-83126c6c.js",
+      "size": 571,
+      "gzip": 404
+    },
+    {
+      "path": "static/nuggets/nugget-a0c1204c.js",
+      "size": 473,
+      "gzip": 311
+    },
+    {
+      "path": "static/nuggets/nugget-b503e3c0.js",
+      "size": 450,
+      "gzip": 318
+    },
+    {
+      "path": "static/nuggets/nugget-bb4457f0.js",
+      "size": 428,
+      "gzip": 316
+    },
+    {
+      "path": "static/nuggets/nugget-ca060cc5.js",
+      "size": 341,
+      "gzip": 253
+    },
+    {
+      "path": "static/nuggets/nugget-dec2e1cb.js",
+      "size": 823,
+      "gzip": 525
+    },
+    {
+      "path": "static/nuggets/nugget-e88d9013.js",
+      "size": 41976,
+      "gzip": 12504
+    },
+    {
+      "path": "static/nuggets/nugget-f51d0d14.js",
+      "size": 457,
+      "gzip": 296
+    },
+    {
+      "path": "static/nuggets/nugget-fb93d38b.js",
+      "size": 383,
+      "gzip": 277
+    }
+  ]
+}

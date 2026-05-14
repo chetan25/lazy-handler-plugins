@@ -1,0 +1,171 @@
+{
+  "name": "with-plugin",
+  "takenAt": "2026-05-12T22:43:37.921Z",
+  "summary": {
+    "byCat": {
+      "main": {
+        "count": 15,
+        "size": 612149,
+        "gzip": 186634,
+        "phase": "initial"
+      },
+      "chunks": {
+        "count": 1,
+        "size": 112594,
+        "gzip": 39627,
+        "phase": "lazy"
+      },
+      "css": {
+        "count": 1,
+        "size": 1968,
+        "gzip": 827,
+        "phase": "initial"
+      },
+      "nuggets": {
+        "count": 7,
+        "size": 43758,
+        "gzip": 14411,
+        "phase": "lazy"
+      }
+    },
+    "phaseTotals": {
+      "initial": {
+        "size": 614117,
+        "gzip": 187461
+      },
+      "lazy": {
+        "size": 156352,
+        "gzip": 54038
+      },
+      "artifact": {
+        "size": 0,
+        "gzip": 0
+      }
+    },
+    "totalSize": 770469,
+    "totalGzip": 241499,
+    "fileCount": 24
+  },
+  "files": [
+    {
+      "path": "chunks/930-69d1b747d59f82bc.js",
+      "size": 130787,
+      "gzip": 34034
+    },
+    {
+      "path": "chunks/972-773d843e15e97eb0.js",
+      "size": 26066,
+      "gzip": 8710
+    },
+    {
+      "path": "chunks/app/about/page-04cb61f38bf38ed7.js",
+      "size": 4030,
+      "gzip": 1749
+    },
+    {
+      "path": "chunks/app/layout-0dab9e3351ff3c70.js",
+      "size": 315,
+      "gzip": 213
+    },
+    {
+      "path": "chunks/app/page-78c838c17885db67.js",
+      "size": 6691,
+      "gzip": 2570
+    },
+    {
+      "path": "chunks/app/_not-found/page-3626915020af4334.js",
+      "size": 1784,
+      "gzip": 891
+    },
+    {
+      "path": "chunks/fd9d1056-87da80e0c187477b.js",
+      "size": 172834,
+      "gzip": 53742
+    },
+    {
+      "path": "chunks/framework-f66176bb897dc684.js",
+      "size": 139978,
+      "gzip": 44946
+    },
+    {
+      "path": "chunks/main-76161758105b3531.js",
+      "size": 123726,
+      "gzip": 36702
+    },
+    {
+      "path": "chunks/main-app-a6fd0012c60153f5.js",
+      "size": 1297,
+      "gzip": 675
+    },
+    {
+      "path": "chunks/pages/_app-42f1003bc93535c9.js",
+      "size": 288,
+      "gzip": 199
+    },
+    {
+      "path": "chunks/pages/_error-9f81aa96d725b3fa.js",
+      "size": 286,
+      "gzip": 198
+    },
+    {
+      "path": "chunks/polyfills-42372ed130431b0a.js",
+      "size": 112594,
+      "gzip": 39627
+    },
+    {
+      "path": "chunks/webpack-3356f9f5ee2f080d.js",
+      "size": 3763,
+      "gzip": 1762
+    },
+    {
+      "path": "css/d6cff7526852bb2b.css",
+      "size": 1968,
+      "gzip": 827
+    },
+    {
+      "path": "nuggets/nugget-0dcff168.js",
+      "size": 756,
+      "gzip": 488
+    },
+    {
+      "path": "nuggets/nugget-42a3c3f5.js",
+      "size": 417,
+      "gzip": 302
+    },
+    {
+      "path": "nuggets/nugget-49ec5d7e.js",
+      "size": 455,
+      "gzip": 299
+    },
+    {
+      "path": "nuggets/nugget-7e027ba3.js",
+      "size": 40891,
+      "gzip": 12419
+    },
+    {
+      "path": "nuggets/nugget-84b96693.js",
+      "size": 508,
+      "gzip": 368
+    },
+    {
+      "path": "nuggets/nugget-9b48f498.js",
+      "size": 348,
+      "gzip": 259
+    },
+    {
+      "path": "nuggets/nugget-db859809.js",
+      "size": 383,
+      "gzip": 276
+    },
+    {
+      "path": "Op_jTHFJEamrx9-rcIi1L/_buildManifest.js",
+      "size": 224,
+      "gzip": 179
+    },
+    {
+      "path": "Op_jTHFJEamrx9-rcIi1L/_ssgManifest.js",
+      "size": 80,
+      "gzip": 64
+    }
+  ]
+}

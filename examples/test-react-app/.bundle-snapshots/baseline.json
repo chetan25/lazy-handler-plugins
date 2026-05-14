@@ -1,0 +1,76 @@
+{
+  "name": "baseline",
+  "takenAt": "2026-05-12T21:34:22.316Z",
+  "summary": {
+    "byCat": {
+      "main": {
+        "count": 2,
+        "size": 223450,
+        "gzip": 72908,
+        "phase": "initial"
+      },
+      "other": {
+        "count": 1,
+        "size": 1652,
+        "gzip": 284,
+        "phase": "artifact"
+      },
+      "html": {
+        "count": 1,
+        "size": 333,
+        "gzip": 244,
+        "phase": "initial"
+      },
+      "chunks": {
+        "count": 1,
+        "size": 6180,
+        "gzip": 2408,
+        "phase": "lazy"
+      }
+    },
+    "phaseTotals": {
+      "initial": {
+        "size": 223783,
+        "gzip": 73152
+      },
+      "lazy": {
+        "size": 6180,
+        "gzip": 2408
+      },
+      "artifact": {
+        "size": 1652,
+        "gzip": 284
+      }
+    },
+    "totalSize": 231615,
+    "totalGzip": 75844,
+    "fileCount": 5
+  },
+  "files": [
+    {
+      "path": "262.55a98ca8.js",
+      "size": 207512,
+      "gzip": 66857
+    },
+    {
+      "path": "262.55a98ca8.js.LICENSE.txt",
+      "size": 1652,
+      "gzip": 284
+    },
+    {
+      "path": "index.html",
+      "size": 333,
+      "gzip": 244
+    },
+    {
+      "path": "main.c0771eb0.js",
+      "size": 15938,
+      "gzip": 6051
+    },
+    {
+      "path": "static/chunks/below-fold.c92f2255.js",
+      "size": 6180,
+      "gzip": 2408
+    }
+  ]
+}

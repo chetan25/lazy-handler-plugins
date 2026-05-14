@@ -1,0 +1,310 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1a1a1a;
+  background: #fafafa;
+}
+
+.nav {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1rem 2rem;
+  background: #111;
+  color: white;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.nav a {
+  color: #ddd;
+  text-decoration: none;
+  font-weight: 500;
+}
+.nav a:hover {
+  color: white;
+}
+
+.page {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.hero {
+  min-height: 80vh;
+  padding: 2rem 0;
+}
+.hero h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.hint {
+  margin-top: 2rem;
+  color: #666;
+  font-style: italic;
+}
+
+.filler {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f0f0f0, #ddd);
+  color: #888;
+  margin: 2rem 0;
+  border-radius: 8px;
+}
+
+.below-fold {
+  min-height: 80vh;
+  padding: 2rem 0;
+}
+.below-fold h2 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+button {
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  cursor: pointer;
+  margin: 0.5rem 0;
+  display: block;
+  background: #2563eb;
+  color: white;
+  border: 0;
+  border-radius: 6px;
+}
+button:hover {
+  background: #1d4ed8;
+}
+
+.message {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background: white;
+  border-left: 3px solid #2563eb;
+  border-radius: 4px;
+}
+
+.reactions {
+  font-size: 2rem;
+  margin-top: 1rem;
+}
+
+ul {
+  margin-top: 1rem;
+  padding-left: 1.5rem;
+}
+
+.error {
+  color: #b91c1c;
+  margin-top: 0.5rem;
+}
+.meta {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+.posts {
+  list-style: none;
+  padding: 0;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.posts li {
+  background: white;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.posts .excerpt {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+.markdown-demo {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.markdown-demo textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+}
+.md-rendered {
+  max-height: 16rem;
+  overflow: auto;
+  background: #0f172a;
+  color: #d1d5db;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+/* ─── Lazy below-fold placeholder ───────────────────────────────────────── */
+.placeholder {
+  padding: 2rem;
+  text-align: center;
+  color: #888;
+  background: #f0f0f0;
+  border-radius: 8px;
+  margin: 1rem 0;
+  font-style: italic;
+}
+
+/* ─── Section A: prefs form ─────────────────────────────────────────────── */
+.prefs-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  max-width: 28rem;
+}
+.prefs-form label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.prefs-form input[type="text"],
+.prefs-form input:not([type]) {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+.theme-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.theme-row span {
+  margin-right: 0.25rem;
+}
+.theme-row button {
+  margin: 0;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.9rem;
+  background: #e5e7eb;
+  color: #1a1a1a;
+  text-transform: capitalize;
+  display: inline-block;
+}
+.theme-row button.theme-on {
+  background: #2563eb;
+  color: white;
+}
+.theme-row button:hover {
+  background: #d1d5db;
+}
+.theme-row button.theme-on:hover {
+  background: #1d4ed8;
+}
+
+/* ─── Section B: cart ───────────────────────────────────────────────────── */
+.cart-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.cart-buttons button {
+  margin: 0;
+}
+.cart-list {
+  list-style: none;
+  padding: 0;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.cart-list li {
+  background: white;
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.95rem;
+}
+
+/* ─── Section C: todos ──────────────────────────────────────────────────── */
+.todo-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  max-width: 28rem;
+}
+.todo-input-row input {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+.todo-input-row button {
+  margin: 0;
+  white-space: nowrap;
+}
+.todo-list {
+  list-style: none;
+  padding: 0;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.todo-list li {
+  background: white;
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.todo-list li.done span {
+  text-decoration: line-through;
+  color: #6b7280;
+}
+
+/* ─── Section D: snapshot log ───────────────────────────────────────────── */
+.log-list {
+  list-style: none;
+  padding: 0;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.log-list li {
+  background: #0f172a;
+  color: #d1d5db;
+  padding: 0.4rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}

@@ -1,0 +1,86 @@
+# Dependencies
+node_modules/
+.pnp.*
+.yarn/cache
+.yarn/install-state.gz
+.yarn/build-state.yml
+.yarn/unplugged
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+.svelte-kit/
+.vercel/
+.cache/
+.parcel-cache/
+.turbo/
+.swc/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Linter / formatter caches
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# Test / coverage
+coverage/
+.nyc_output/
+*.lcov
+junit.xml
+
+# Bundle analysis artifacts
+stats.json
+bundle-analyzer.html
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Env files — committed defaults stay (.env.example), everything else does not
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+*.swp
+*.swo
+*~
+
+# Editors / IDEs
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Claude Code workspace — user-local state stays local; shared settings.json
+# (if/when added) is committed.
+.claude/*
+!.claude/settings.json
+
+# Editor backups / temp
+*.bak
+*.tmp
+.tmp/
+*.orig
+
+# Optional npm/yarn/pnpm cache directories (in case anyone aims them here)
+.npm/
+.yarn-integrity

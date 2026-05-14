@@ -1,0 +1,29 @@
+{
+  "name": "test-nextjs-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "next lint",
+    "size": "node scripts/bundle-size.js show",
+    "size:baseline": "npm run build && node scripts/bundle-size.js save baseline",
+    "size:plugin": "npm run build && node scripts/bundle-size.js save with-plugin",
+    "size:diff": "node scripts/bundle-size.js compare baseline with-plugin"
+  },
+  "dependencies": {
+    "jotai": "^2.20.0",
+    "next": "^14.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "marked": "^18.0.3",
+    "typescript": "^5.3.0",
+    "lazy-handler-webpack-plugin": "file:.."
+  }
+}

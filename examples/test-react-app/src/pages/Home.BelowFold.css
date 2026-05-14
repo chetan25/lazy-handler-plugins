@@ -1,0 +1,123 @@
+/* Component-scoped CSS for the below-fold section.
+   Imported from Home.BelowFold.tsx so it lives in the same lazy chunk —
+   neither the JS nor this CSS ships until the section is mounted. */
+
+.below-fold {
+  padding: 2rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.below-fold h2 {
+  font-size: 2rem;
+}
+
+.below-fold code {
+  background: #eef;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.card h3 {
+  margin-bottom: 0.25rem;
+}
+
+.card input,
+.card textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.card .error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+
+.card .user {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin-top: 0.5rem;
+}
+.card .user dt {
+  font-weight: 600;
+  color: #555;
+}
+
+.comments {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.comments li {
+  background: #f9fafb;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+.comments time {
+  font-size: 0.75rem;
+  color: #6b7280;
+  display: block;
+}
+
+.filter-row {
+  display: flex;
+  gap: 0.5rem;
+}
+.filter-row button {
+  background: #e5e7eb;
+  color: #111;
+  flex: 0 0 auto;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  text-transform: capitalize;
+}
+.filter-row button.active {
+  background: #2563eb;
+  color: white;
+}
+
+.todos {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.todos li {
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+}
+.todos li.done {
+  text-decoration: line-through;
+  color: #888;
+}
+
+.placeholder {
+  padding: 1.5rem;
+  text-align: center;
+  color: #888;
+  font-style: italic;
+}

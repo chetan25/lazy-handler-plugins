@@ -1,0 +1,6 @@
+node_modules
+dist
+stats.json
+*.log
+.DS_Store
+# keep .bundle-snapshots committed for baseline comparison
