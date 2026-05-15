@@ -100,11 +100,11 @@ class LazyHandlerPlugin {
       "LazyHandlerPlugin",
       (compilation, { normalModuleFactory }) => {
 
-        // ── Resolve nugget:// virtual module scheme ─────────────────────────
+        // ── Resolve nugget: virtual module scheme ──────────────────────────
         normalModuleFactory.hooks.resolveForScheme
           .for("nugget")
           .tap("LazyHandlerPlugin", (resourceData) => {
-            // nugget://nugget-a3f7c9b1 → resolved as a virtual resource
+            // nugget:nugget-a3f7c9b1 → resolved as a virtual resource
             resourceData.path = resourceData.resource;
             resourceData.query = "";
             resourceData.fragment = "";
@@ -114,7 +114,7 @@ class LazyHandlerPlugin {
         // ── No-op the loader list for nugget modules ────────────────────────
         // The source from readResource is already valid JS — no further
         // transformation needed (and nothing in the loader chain matches
-        // the `nugget://...` resource anyway).
+        // the `nugget:...` resource anyway).
         normalModuleFactory.hooks.createModuleClass
           .for("nugget")
           .tap("LazyHandlerPlugin", (createData) => {
@@ -122,12 +122,12 @@ class LazyHandlerPlugin {
           });
 
         // ── Serve virtual nugget source from the registry ───────────────────
-        // resource looks like `nugget://nugget-a3f7c9b1`. Strip the scheme,
+        // resource looks like `nugget:nugget-a3f7c9b1`. Strip the scheme,
         // look up the registered source by chunk name, and hand it back.
         NormalModule.getCompilationHooks(compilation).readResource
           .for("nugget")
           .tapAsync("LazyHandlerPlugin", (loaderContext, callback) => {
-            const chunkName = loaderContext.resource.replace(/^nugget:\/\//, "");
+            const chunkName = loaderContext.resource.replace(/^nugget:/, "");
             const meta = nuggetRegistry.getByChunk(chunkName);
             if (!meta || typeof meta.source !== "string") {
               return callback(new Error(

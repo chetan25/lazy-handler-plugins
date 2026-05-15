@@ -7,10 +7,9 @@
 //
 // Wires the bundler-neutral core transform into Rollup's plugin API:
 //   buildStart   → clear registry
-//   transform    → core nuggetTransform + rewrite `nugget://x` → `nugget:x`
+//   transform    → core nuggetTransform (emits `nugget:<chunk>` import specs)
 //   resolveId    → map `nugget:...` → virtual id we own
 //   load         → serve registered nugget source for those ids
-//   transform    → run JSX/TSX through the core
 //   generateBundle → emit nugget-manifest.json
 //
 // The runtime is auto-prepended to every JSX/TSX module via the core's
@@ -174,16 +173,21 @@ module.exports = function lazyHandlerRollup(userOptions = {}) {
 
     resolveId(id) {
       if (options.disabled) return null;
-      // Source emits `nugget:<chunkName>` (single colon, no `//`). The
-      // double-slash form `nugget://...` was previously matched by Vite's
-      // `isExternalUrl` heuristic (`^([a-z]+:)?\/\/`), which short-circuited
-      // plugin resolution and caused the dev server to ship the literal URL
-      // to the browser — fetch failed with an unknown-scheme/CORS error.
-      // The single-colon form (RFC-3986 opaque) skips that heuristic.
-      if (!id.startsWith("nugget:")) return null;
-      // Strip the scheme and own the rest as a `.js`-suffixed virtual id.
-      const chunkName = id.slice("nugget:".length);
-      return virtualIdFor(chunkName);
+      // The core emits `nugget:<chunkName>` (single colon, RFC-3986 opaque
+      // form). The double-slash form `nugget://...` matches Vite's
+      // `isExternalUrl` heuristic (`^([a-z]+:)?\/\/`), which short-circuits
+      // plugin resolution and causes the dev server to ship the literal URL
+      // to the browser — fetch fails with an unknown-scheme/CORS error.
+      // We claim BOTH forms here so a stray `nugget://` (e.g. a hand-written
+      // import in user code) still resolves at the resolveId layer rather
+      // than failing silently later.
+      if (id.startsWith("nugget://")) {
+        return virtualIdFor(id.slice("nugget://".length));
+      }
+      if (id.startsWith("nugget:")) {
+        return virtualIdFor(id.slice("nugget:".length));
+      }
+      return null;
     },
 
     load(id) {
@@ -221,24 +225,6 @@ module.exports = function lazyHandlerRollup(userOptions = {}) {
       // No handlers matched → core returned the input verbatim. Skip to let
       // other transforms run unchanged.
       if (result.code === code) return null;
-
-      // Rewrite `nugget://<chunk>` → `nugget:<chunk>` for Vite/Rollup.
-      //
-      // Why: the core emits `nugget://<chunk>` (URI-authority form) because
-      // webpack's resolveForScheme handler — and Next.js's wrapping resolvers
-      // — only route reliably on schemes with `//`. Vite, on the other hand,
-      // categorises any `scheme://…` specifier as an external URL in its
-      // import-analysis pass and skips plugin resolveId entirely, so the dev
-      // server ships the literal URL to the browser and the fetch fails with
-      // an unknown-scheme / CORS error. A single-colon `nugget:<chunk>` is the
-      // canonical Vite virtual-module shape (cf. `virtual:foo`) — Vite's
-      // bare-import / external regexes leave it alone and our resolveId hook
-      // below claims it. Only the dynamic-import argument string is rewritten;
-      // everything else (registry keys, manifest paths) stays unchanged.
-      result.code = result.code.replace(
-        /(["'])nugget:\/\/(nugget-[a-f0-9]+)\1/g,
-        '$1nugget:$2$1'
-      );
       return result;
     },
 

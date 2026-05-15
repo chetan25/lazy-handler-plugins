@@ -3,7 +3,7 @@
 // stubs and registers the extracted source in the shared registry. Webpack,
 // Rollup, and Vite adapters all delegate to this function. The adapter is
 // responsible for serving the registered source as a virtual module
-// (`nugget://<chunkName>`) when the bundler later resolves the dynamic import
+// (`nugget:<chunkName>`) when the bundler later resolves the dynamic import
 // the proxy stub emits.
 "use strict";
 
@@ -38,7 +38,7 @@ const KNOWN_GLOBALS = new Set([
 
 /**
  * Transform a JSX/TSX module: extract inline event handlers into virtual
- * `nugget://` modules and rewrite the props to dynamic-import proxy stubs.
+ * `nugget:` modules and rewrite the props to dynamic-import proxy stubs.
  *
  * Pure function — does not depend on any bundler API. Side effect: writes
  * the extracted nugget sources to the shared `nuggetRegistry` so the
@@ -86,7 +86,7 @@ function nuggetTransform(source, filePath, options = {}) {
   // an equivalent import statement.
   //
   // Relative specifiers (./foo, ../bar) are resolved to absolute paths here.
-  // The nugget chunk's resource is a virtual `nugget://...` URL, so webpack
+  // The nugget chunk's resource is a virtual `nugget:...` URI, so webpack
   // can't resolve relatives against it — we hand it an absolute path instead.
   const sourceFileDir = path.dirname(filePath);
   traverse(ast, {
@@ -340,14 +340,15 @@ function nuggetTransform(source, filePath, options = {}) {
     // The webpackChunkName magic comment preserves the human-readable chunk
     // name so output.chunkFilename can route it to nuggetDir.
     //
-    // Emitting `nugget://<name>` (URI authority form) is what webpack expects —
-    // it routes the resource through `resolveForScheme("nugget")` and avoids
-    // tripping path-style resolver plugins like Next.js's jsconfig-paths-plugin
-    // that crash on a single-colon `nugget:<name>` specifier on Windows. The
-    // Vite/Rollup adapter rewrites this to `nugget:<name>` in its `transform`
-    // hook so Vite's import-analysis routes it through plugin resolveId rather
-    // than treating it as an external URL.
-    const importArg = t.stringLiteral(`nugget://${chunkName}`);
+    // Emit single-colon `nugget:<name>` (RFC-3986 opaque URI). The previous
+    // double-slash form `nugget://<name>` (URI authority) was matched by
+    // Vite's import-analysis `isExternalUrl` heuristic (`^([a-z]+:)?\/\/`),
+    // which short-circuits plugin resolveId entirely — Vite shipped the
+    // literal URL to the browser and the fetch failed with an unknown-scheme
+    // error. Single-colon side-steps that regex while still being a valid
+    // scheme that webpack's `resolveForScheme("nugget")` recognises (the
+    // scheme is the part before the first `:`, with or without `//`).
+    const importArg = t.stringLiteral(`nugget:${chunkName}`);
     t.addComment(importArg, "leading", ` webpackChunkName: "${chunkName}" `);
 
     // Build the wrapper's parameter list. We keep the SAME identifier bindings
@@ -449,7 +450,7 @@ function nuggetTransform(source, filePath, options = {}) {
     }
 
     // Register in global registry — source is served by the plugin's
-    // readResource hook when webpack builds the virtual nugget:// module.
+    // readResource hook when webpack builds the virtual nugget: module.
     nuggetRegistry.register(id, {
       chunkName,
       sourceFile: filePath,
