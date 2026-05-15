@@ -214,7 +214,7 @@ function __nuggetAttemptLoad(id, importFn, attempt) {
  * Called by every rewritten JSX event handler prop.
  *
  * @param {string}   id          - Stable handler ID (nugget_onClick_a3f7c9b1)
- * @param {Function} importFn    - () => import('nugget:nugget-a3f7c9b1')
+ * @param {Function} importFn    - () => import('nugget://nugget-a3f7c9b1')
  * @param {any[]}    args        - Raw event args (will be snapshotted)
  * @param {object}   capturedMeta - { scopeId, refs: string[] }
  */

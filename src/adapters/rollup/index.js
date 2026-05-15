@@ -7,6 +7,7 @@
 //
 // Wires the bundler-neutral core transform into Rollup's plugin API:
 //   buildStart   → clear registry
+//   transform    → core nuggetTransform + rewrite `nugget://x` → `nugget:x`
 //   resolveId    → map `nugget:...` → virtual id we own
 //   load         → serve registered nugget source for those ids
 //   transform    → run JSX/TSX through the core
@@ -220,6 +221,24 @@ module.exports = function lazyHandlerRollup(userOptions = {}) {
       // No handlers matched → core returned the input verbatim. Skip to let
       // other transforms run unchanged.
       if (result.code === code) return null;
+
+      // Rewrite `nugget://<chunk>` → `nugget:<chunk>` for Vite/Rollup.
+      //
+      // Why: the core emits `nugget://<chunk>` (URI-authority form) because
+      // webpack's resolveForScheme handler — and Next.js's wrapping resolvers
+      // — only route reliably on schemes with `//`. Vite, on the other hand,
+      // categorises any `scheme://…` specifier as an external URL in its
+      // import-analysis pass and skips plugin resolveId entirely, so the dev
+      // server ships the literal URL to the browser and the fetch fails with
+      // an unknown-scheme / CORS error. A single-colon `nugget:<chunk>` is the
+      // canonical Vite virtual-module shape (cf. `virtual:foo`) — Vite's
+      // bare-import / external regexes leave it alone and our resolveId hook
+      // below claims it. Only the dynamic-import argument string is rewritten;
+      // everything else (registry keys, manifest paths) stays unchanged.
+      result.code = result.code.replace(
+        /(["'])nugget:\/\/(nugget-[a-f0-9]+)\1/g,
+        '$1nugget:$2$1'
+      );
       return result;
     },
 
