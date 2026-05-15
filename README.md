@@ -245,7 +245,8 @@ A complete, runnable Vite example lives at
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `eventProps` | `string[]` | `["onClick", "onChange", "onSubmit", …]` | JSX prop names to auto-extract |
-| `minHandlerLines` | `number` | `3` | Skip handlers shorter than this |
+| `minHandlerLines` | `number` | `3` | Skip handlers shorter than this. Bypassed when `extractInlineFunctions` is on. |
+| `extractInlineFunctions` | `boolean` | `false` | **Opt-in.** When `true`, ANY JSX attribute (not just `eventProps`) with an inline arrow/function value is a candidate, and the gate becomes "must capture at least one import or one same-file local function." Handlers whose only captures are props or plain state values are skipped. See [Opt-in: extractInlineFunctions](#opt-in-extractinlinefunctions). |
 | `injectRuntime` | `boolean` | `true` | Auto-inject the runtime into the entry bundle |
 | `belowFoldThreshold` | `number` | `600` | Pixel offset for below-fold detection |
 | `nuggetDir` | `string` | `"static/nuggets"` | Output path for nugget chunks (must match your `output.chunkFilename` mapping) |
@@ -350,6 +351,88 @@ onClick={this.handleClick}
 import { handleClick } from "./handlers";
 onClick={handleClick}
 ```
+
+### Defensive guards (always on)
+
+The plugin is conservative: when in doubt, it leaves the handler inline so
+the app's behavior is preserved exactly. A candidate handler stays inline
+when **any** of these are true — independent of `eventProps`,
+`minHandlerLines`, or `extractInlineFunctions`:
+
+- **Handler body contains JSX.** Nugget chunks bypass all loaders; JSX
+  inside one would fail to parse and break the build. Hoist the inner JSX
+  to a sibling component instead.
+- **Handler lives inside a non-component callback** — `.map`, `.filter`,
+  `.forEach`, or any function whose parent is a `CallExpression`. Injecting
+  `useRef` / `useEffect` into that callback would trigger React's
+  "Invalid hook call". Wrap the row in its own component (see
+  [Recommendations](#recommendations)).
+- **Handler uses `this`** at the top level (outside any nested function).
+  After extraction, `this` resolves to `undefined` in the nugget module
+  and behavior would silently change.
+- **Handler is a generator** (`function* () {}`). The wrapper rebuild
+  emits a plain arrow and would drop the generator semantics.
+- **Captures reach outside the component's scope chain** — e.g. a `const`
+  declared inside a nested helper function. The scope registry has no way
+  to wire those through from the component body.
+- **The enclosing function isn't recognizable as a component.** A function
+  qualifies when its name is PascalCase, it's the default export, or it's
+  wrapped in `memo` / `forwardRef` / `observer` / `lazy` (or their
+  member-access forms like `React.memo`).
+
+If a handler you expected to be extracted isn't, the manifest
+(`nugget-manifest.json` next to your build output) will simply not list
+it. The plugin emits no warning so it stays silent on intentional skips,
+but you can grep the main bundle for the handler body to confirm it
+shipped inline.
+
+---
+
+## Opt-in: `extractInlineFunctions`
+
+The default mode only looks at `eventProps`. Turning on
+`extractInlineFunctions` extends extraction in two ways:
+
+1. **Scope widens to every JSX attribute.** Render props, custom callback
+   props like `formatValue`, `renderRow`, `onCustomEvent`, anything with an
+   inline arrow / function expression value is now a candidate.
+2. **Gate switches from "length" to "captures a dep worth deferring."**
+   The `minHandlerLines` heuristic is bypassed. Instead, the handler must
+   capture at least one import OR one same-file local function (a
+   `function decl`, a `const fn = () => …`, or a `const fn = function(){}`).
+   Handlers whose captures are **only** props, only `useState` values, or
+   only state setters are skipped — the proxy + chunk overhead would cost
+   more bytes than they save.
+
+```jsx
+import { formatDate } from "date-fns";
+
+function ItemRow({ item, onItemClick }) {
+  const validate = (v) => v.length > 3;
+
+  return (
+    <Card
+      // ✅ Extracted — captures `formatDate` (import).
+      formatter={(v) => formatDate(v)}
+
+      // ✅ Extracted — captures `validate` (local function).
+      onBeforeSubmit={() => validate(item.name)}
+
+      // ❌ Skipped — only captures `onItemClick` (prop).
+      onActivate={() => onItemClick(item)}
+
+      // ❌ Skipped — only captures state-shape values; nothing heavy to defer.
+      onReset={() => { setX(0); setY(0); setZ(0); }}
+    />
+  );
+}
+```
+
+Named-reference extraction (`onClick={handleX}`) stays scoped to
+`eventProps` even when this option is on. The safety check that the
+binding is referenced nowhere else only knows about event prop names; the
+risk of removing a declaration referenced by some custom non-event prop
+is too high.
 
 ---
 
@@ -497,6 +580,92 @@ const unsubscribe = onNuggetLoadError(({ id, error, willRetry }) => {
 ```
 
 The runtime also dispatches a `nugget:load-error` `CustomEvent` on `window` with the same detail shape, for tools that listen to window events directly.
+
+---
+
+## Recommendations
+
+These tips help the plugin find more handlers to extract and keep builds
+fast. None of them require you to abandon idiomatic React.
+
+### Get more handlers extracted
+
+- **Lift inline JSX out of handlers.** A handler that builds JSX inside
+  itself (`setModal(<Confirm/>)`) is skipped because the nugget chunk would
+  contain JSX that no loader will transform. Hoist the JSX into a sibling
+  component or a separate constant; the handler is then a plain function
+  call and becomes eligible.
+
+- **Wrap rows in their own component instead of inlining handlers in
+  `.map`.** The plugin can't extract a handler created inside a `.map`
+  callback (hooks injection would crash). Hoist the iteration body:
+
+  ```jsx
+  // Before — handler made per iteration, not extracted
+  {items.map(item => (
+    <li onClick={() => doHeavyThing(item)}>{item.name}</li>
+  ))}
+
+  // After — Row is a component, handler IS extracted
+  function Row({ item }) {
+    return <li onClick={() => doHeavyThing(item)}>{item.name}</li>;
+  }
+  // …
+  {items.map(item => <Row key={item.id} item={item} />)}
+  ```
+
+- **Move helpers you call from handlers to module level.** Helpers
+  declared inside the component re-allocate on every render. Hoisting
+  them to the module turns them into imports — first-class citizens of
+  both the default extraction path and the new `extractInlineFunctions`
+  filter.
+
+- **Name components in PascalCase** and either export them or wrap them in
+  `memo` / `forwardRef`. That naming is how the plugin recognizes "this
+  function is a safe place to inject hooks."
+
+- **Don't rely on JSX spread for handlers.** `<button {...handlers}/>`
+  hides the prop name from the AST walker; those handlers stay inline.
+  Name them on the element you want extracted.
+
+- **Drop `useCallback` from handlers that don't need stable identity.**
+  Wrapped handlers are skipped — the wrapper is intentionally read as
+  "the author wants this exact identity." The proxy stub the plugin emits
+  is itself stable enough for most reference-equality cases (it's the same
+  function across renders).
+
+- **Avoid `this` inside event handlers.** Modern React rarely needs it; if
+  you have a class component pattern, refactor the handler to read state /
+  props directly. Handlers using `this` are skipped.
+
+### Get faster builds
+
+- **Trim `eventProps` to the events you actually use.** A shorter list
+  means fewer JSX attributes inspected per file. The default covers the
+  React DOM event surface; remove what you don't need.
+
+- **Keep `minHandlerLines` realistic for your codebase.** Lowering it to 1
+  (default mode) extracts every single-line handler — those usually cost
+  more in proxy/chunk overhead than they save. Under
+  `extractInlineFunctions: true` the length gate is already bypassed, so
+  there's no reason to touch `minHandlerLines` in that mode.
+
+- **Watch `nugget-manifest.json`.** Emitted alongside your build, it lists
+  every registered handler with its source file and prop name. It's the
+  fastest way to confirm an extraction landed where you expected — and to
+  spot files that contribute disproportionately many small handlers
+  (often a sign the file should split into smaller components).
+
+- **Disable filesystem caching while iterating.** Both webpack's
+  `cache: { type: 'filesystem' }` and Vite's `node_modules/.vite` can skip
+  the loader on cached modules. Without the loader running, the nugget
+  registry has no entry for that file and the build fails with
+  `No registered source for "…"`. See the Caveats under
+  [Development mode](#development-mode).
+
+- **Leave webpack dev extraction off (the default).** Inline handlers are
+  much friendlier to HMR. Only flip `disabled: false` when you're
+  specifically profiling production-shape behavior.
 
 ---
 

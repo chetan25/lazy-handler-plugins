@@ -28,6 +28,10 @@ const DEFAULT_OPTIONS = {
     "onScroll", "onPointerDown", "onDrop", "onDragStart",
   ],
   minHandlerLines: 3,
+  // Opt-in: extract ANY JSX-attribute inline arrow/function whose body
+  // captures an import or a same-file local function. Off by default to
+  // keep extraction scoped to the configured `eventProps` list.
+  extractInlineFunctions: false,
   injectRuntime: true,
   belowFoldThreshold: 600,
   nuggetDir: "static/nuggets",
@@ -221,6 +225,7 @@ module.exports = function lazyHandlerRollup(userOptions = {}) {
       const result = nuggetTransform(code, filePath, {
         eventProps: options.eventProps,
         minHandlerLines: options.minHandlerLines,
+        extractInlineFunctions: options.extractInlineFunctions,
       });
       // No handlers matched → core returned the input verbatim. Skip to let
       // other transforms run unchanged.

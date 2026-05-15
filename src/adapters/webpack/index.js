@@ -12,6 +12,10 @@ const DEFAULT_OPTIONS = {
   ],
   // Skip handlers with fewer lines than this (leave trivial one-liners inline)
   minHandlerLines: 3,
+  // Opt-in: extract ANY JSX-attribute inline arrow/function whose body
+  // captures an import or a same-file local function. Off by default to
+  // keep extraction scoped to the configured `eventProps` list.
+  extractInlineFunctions: false,
   // Automatically inject the nugget runtime (~600 bytes) into the entry bundle
   injectRuntime: true,
   // Pixel threshold — components rendered below this offset get data-nugget-lazy
@@ -30,7 +34,13 @@ class LazyHandlerPlugin {
   apply(compiler) {
     if (this.options.disabled) return;
 
-    const { eventProps, injectRuntime, nuggetDir, belowFoldThreshold } = this.options;
+    const {
+      eventProps,
+      injectRuntime,
+      nuggetDir,
+      belowFoldThreshold,
+      extractInlineFunctions,
+    } = this.options;
     const { webpack } = compiler;
     const { EntryPlugin, NormalModule, sources, DefinePlugin } = webpack;
 
@@ -82,6 +92,7 @@ class LazyHandlerPlugin {
           options: {
             eventProps,
             minHandlerLines: this.options.minHandlerLines,
+            extractInlineFunctions,
           },
         },
       ],

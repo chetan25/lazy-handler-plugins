@@ -55,7 +55,21 @@ const KNOWN_GLOBALS = new Set([
  *                          circuit.
  */
 function nuggetTransform(source, filePath, options = {}) {
-  const { eventProps = [], minHandlerLines = 3 } = options;
+  const {
+    eventProps = [],
+    minHandlerLines = 3,
+    // Opt-in: extend extraction beyond `eventProps` to ANY JSX attribute
+    // whose value is an inline arrow/function expression. To avoid the
+    // overhead of extracting handlers that wouldn't shrink the main bundle
+    // anyway, this mode also requires the inline function to capture at
+    // least one import or one same-file locally-defined function. A handler
+    // whose only captures are props (or state setters) is skipped — the
+    // proxy + chunk overhead would cost more than it saves. Named-reference
+    // extraction (`onClick={handleX}`) stays limited to `eventProps` even
+    // when this is on, since a stray non-JSX reference to a binding that
+    // lives in some custom prop is far harder to predict than for events.
+    extractInlineFunctions = false,
+  } = options;
 
   // ── Parse source into AST ─────────────────────────────────────────────────
   let ast;
@@ -137,7 +151,11 @@ function nuggetTransform(source, filePath, options = {}) {
   traverse(ast, {
     JSXAttribute(nodePath) {
       const propName = nodePath.node.name?.name;
-      if (!eventProps.includes(propName)) return;
+      const isEventProp = eventProps.includes(propName);
+      // With `extractInlineFunctions` enabled we also scan non-event props
+      // (custom render-prop callbacks, `formatValue` style functional props,
+      // etc.). Without it, the visitor keeps its original event-only scope.
+      if (!isEventProp && !extractInlineFunctions) return;
 
       const value = nodePath.node.value;
       if (value?.type !== "JSXExpressionContainer") return;
@@ -154,6 +172,13 @@ function nuggetTransform(source, filePath, options = {}) {
       let namedIdentifier = null;
 
       if (expr.type === "Identifier") {
+        // Named-ref extraction is intentionally restricted to `eventProps`.
+        // The reference-uniqueness check (`allReferencesAreEventProps`)
+        // only knows about event prop names, and the safety of removing the
+        // original declaration depends on knowing every consumer's prop
+        // shape. Custom non-event props (render slots, value formatters)
+        // are extracted only when their value is an inline arrow/function.
+        if (!isEventProp) return;
         const ident = expr.name;
         const binding = nodePath.scope.getBinding(ident);
         if (!binding) return; // implicit global — skip
@@ -170,6 +195,62 @@ function nuggetTransform(source, filePath, options = {}) {
         expr.type === "FunctionExpression";
       if (!isInlineFunction) return;
 
+      // ── Defensive guards ────────────────────────────────────────────────
+      // The plugin's contract is "shrink the bundle without breaking the
+      // app." The scenarios below would either crash the build, crash the
+      // app at runtime, or silently change handler semantics. In all of
+      // them we leave the handler inline — the user pays a few bytes but
+      // their code keeps working unchanged.
+
+      // Guard A: generator handlers (`function* () {}` / `async function*`).
+      // The wrapper rebuild below emits a plain arrow expression, so the
+      // generator semantics (`yield` produces values lazily) would silently
+      // disappear. Arrows can't even be generators, so this only matters
+      // for FunctionExpression handlers — but checking unconditionally is
+      // cheap insurance against future Babel parser changes.
+      if (expr.generator) return;
+
+      // Guard B: the JSX attribute lives inside a function that isn't a
+      // React component — most commonly a `.map`/`.filter`/etc. callback
+      // or a generic helper that returns JSX. injectScopeWiring would
+      // hoist `useRef` and `useEffect` into that function; React's
+      // rules-of-hooks detector would throw "Invalid hook call" at runtime.
+      // PascalCase names, top-level declarations, and known component
+      // wrappers (memo / forwardRef / observer / lazy) are allowed; the
+      // rest fall through to "skip".
+      const enclosingFn = nodePath.getFunctionParent();
+      if (!isLikelyComponentFn(enclosingFn)) return;
+
+      // Guard C: `this` referenced at the top level of the handler body.
+      // After extraction the handler lives in its own module (ESM, implicit
+      // strict mode), so `this` resolves to `undefined` instead of whatever
+      // surrounding context the original closure had. Walk only the
+      // handler's own scope — nested functions have their own `this`, so
+      // their occurrences are unrelated and shouldn't block extraction.
+      //
+      // Guard D: JSX appears inside the handler body. Nugget chunks are
+      // served via readResource and bypass every loader (babel/swc/ts),
+      // so JSX inside the handler would reach the bundler as plain JS and
+      // fail to parse. We check the entire handler subtree because nested
+      // helpers serialized into the same chunk are equally affected.
+      const checkPath = namedBinding
+        ? getFunctionInTreePath(namedBinding)
+        : nodePath.get("value").get("expression");
+
+      let usesThisAtTopLevel = false;
+      checkPath.traverse({
+        Function(p) { p.skip(); },
+        ThisExpression() { usesThisAtTopLevel = true; },
+      });
+      if (usesThisAtTopLevel) return;
+
+      let containsJSX = false;
+      checkPath.traverse({
+        JSXElement() { containsJSX = true; },
+        JSXFragment() { containsJSX = true; },
+      });
+      if (containsJSX) return;
+
       // Strip TypeScript-only syntax from the handler AST. The emitted nugget
       // module is served via the readResource hook with no loaders attached,
       // so it must already be plain JS by the time it leaves the loader.
@@ -178,10 +259,15 @@ function nuggetTransform(source, filePath, options = {}) {
       // outright by the proxy call below.)
       stripTypes(expr);
 
-      // Skip trivial handlers below the line threshold
+      // Skip trivial handlers below the line threshold. Bypassed when
+      // `extractInlineFunctions` is on — that mode replaces the length
+      // heuristic with the stricter "must capture an import or local
+      // function" filter applied after capture analysis below. A 1-line
+      // handler that calls a heavy imported util is the prime case the
+      // option is designed to extract.
       const handlerSource = generate(expr).code;
       const lineCount = handlerSource.split("\n").length;
-      if (lineCount < minHandlerLines) return;
+      if (!extractInlineFunctions && lineCount < minHandlerLines) return;
 
       // Stable hash — same handler in same file always produces same chunk name.
       // For named-ref extraction we key by identifier instead of prop+body so
@@ -281,6 +367,42 @@ function nuggetTransform(source, filePath, options = {}) {
           importedName: info && info.imported,
         };
       });
+
+      // Guard E: every capture must be reachable from the enclosing
+      // component's scope chain. A capture whose binding lives in a
+      // sibling/descendant scope (e.g. a variable declared inside a nested
+      // helper function or a `.map` callback that surrounds the JSX)
+      // cannot be wired through the scope registry from the component
+      // body, so the extracted nugget would deref `null` and the handler
+      // would silently no-op at runtime. Leaving the handler inline keeps
+      // its closure intact and preserves the user's behavior.
+      const allCapturesReachable = captures.every((c) => {
+        const binding = handlerPath.scope.getBinding(c.name);
+        if (!binding) return true; // implicit global — not registered anyway
+        let s = enclosingFn.scope;
+        while (s) {
+          if (s === binding.scope) return true;
+          s = s.parent;
+        }
+        return false;
+      });
+      if (!allCapturesReachable) return;
+
+      // With `extractInlineFunctions` enabled we only extract when the
+      // handler captures at least one import OR one same-file local
+      // function (`function decl`, or `const x = () => …` / `function expr`).
+      // A handler whose captures are ALL props or plain state values has
+      // nothing heavy to defer — adding the proxy + chunk would grow the
+      // bundle, not shrink it. Imports stay detected via `c.isImported`;
+      // local functions are detected by binding shape lookup below.
+      if (extractInlineFunctions) {
+        const hasUsefulCapture = captures.some((c) => {
+          if (c.isImported) return true;
+          const binding = handlerPath.scope.getBinding(c.name);
+          return isLocalFunctionBinding(binding);
+        });
+        if (!hasUsefulCapture) return;
+      }
 
       // If the handler hoists a call (preventDefault etc.) we must preserve
       // its identifier bindings on the wrapper. We can only do that safely for
@@ -606,21 +728,39 @@ function injectScopeWiring(ast, extractedHandlers, t) {
     //    remount, which is what makes the StrictMode case recover.
     //
     //       useEffect(() => {
-    //         __nuggetRegisterRef(__scopeId, "setX", setX);
+    //         try { __nuggetRegisterRef(__scopeId, "setX", setX); } catch (_e) {}
     //         ...
     //       });
+    //
+    // Each register call is wrapped in its own try/catch. A capture whose
+    // `let`/`const` declaration sits AFTER an early return is in the temporal
+    // dead zone when the early-return path was taken on this render — reading
+    // it throws ReferenceError. We can't position the effect after the late
+    // declaration (rules-of-hooks), so we tolerate per-capture failure here:
+    // the captures that ARE initialized still register; the ones in TDZ are
+    // skipped this render and will be retried on the next commit. Wrapping
+    // EACH call separately (not the whole block) keeps a single TDZ-bound
+    // capture from silently nuking the registrations after it.
     const registerEffect = t.expressionStatement(
       t.callExpression(t.identifier("useEffect"), [
         t.arrowFunctionExpression(
           [],
           t.blockStatement(
             [...captureNames].map((name) =>
-              t.expressionStatement(
-                t.callExpression(t.identifier("__nuggetRegisterRef"), [
-                  t.identifier("__scopeId"),
-                  t.stringLiteral(name),
-                  t.identifier(name),
-                ])
+              t.tryStatement(
+                t.blockStatement([
+                  t.expressionStatement(
+                    t.callExpression(t.identifier("__nuggetRegisterRef"), [
+                      t.identifier("__scopeId"),
+                      t.stringLiteral(name),
+                      t.identifier(name),
+                    ])
+                  ),
+                ]),
+                t.catchClause(
+                  t.identifier("_e"),
+                  t.blockStatement([])
+                )
               )
             )
           )
@@ -643,16 +783,48 @@ function injectScopeWiring(ast, extractedHandlers, t) {
     // We build a fresh template per insertion site so each call site gets
     // its own AST nodes (Babel doesn't like node identity sharing across
     // multiple parent positions).
-    const buildRenderBodyRegisterCalls = () =>
-      [...captureNames].map((name) =>
-        t.expressionStatement(
-          t.callExpression(t.identifier("__nuggetRegisterRef"), [
-            t.identifier("__scopeId"),
-            t.stringLiteral(name),
-            t.identifier(name),
-          ])
-        )
-      );
+    //
+    // Filter by binding-in-scope at the insertion position. A `const`/`let`
+    // capture declared AFTER an early return is in the TDZ at the early
+    // return point — emitting the register call there would throw at render
+    // time and crash the component. Params, hoisted function declarations,
+    // and bindings from outer scopes (module-level imports, enclosing fns)
+    // are always reachable from anywhere inside the component body.
+    const isBindingReachableAt = (name, atPos) => {
+      const binding = fnPath.scope.getBinding(name);
+      if (!binding) return false;
+      // Binding must be in an ancestor scope of (or equal to) the fn scope —
+      // otherwise it lives inside a nested block we can't safely reach from
+      // the component body's top level.
+      let s = fnPath.scope;
+      let foundAncestor = false;
+      while (s) {
+        if (s === binding.scope) { foundAncestor = true; break; }
+        s = s.parent;
+      }
+      if (!foundAncestor) return false;
+      // Outer-scope binding: in scope from the moment this fn enters.
+      if (binding.scope !== fnPath.scope) return true;
+      // Inside the fn scope: only `let`/`const` have a TDZ. `var`, function
+      // declarations, and params are accessible from function entry.
+      if (binding.kind !== "let" && binding.kind !== "const") return true;
+      const declStart = binding.path.node.start;
+      if (declStart == null) return true;
+      return declStart < atPos;
+    };
+
+    const buildRenderBodyRegisterCallsAt = (atPos) =>
+      [...captureNames]
+        .filter((name) => isBindingReachableAt(name, atPos))
+        .map((name) =>
+          t.expressionStatement(
+            t.callExpression(t.identifier("__nuggetRegisterRef"), [
+              t.identifier("__scopeId"),
+              t.stringLiteral(name),
+              t.identifier(name),
+            ])
+          )
+        );
 
     // Walk the component body for every ReturnStatement, skipping nested
     // function scopes so we don't inject into `useCallback` arrows, JSX
@@ -671,10 +843,11 @@ function injectScopeWiring(ast, extractedHandlers, t) {
       // No top-level return found — append the calls at the body's end.
       // Pathological (component returns undefined) but at least keeps the
       // registry populated on render.
-      body.body.push(...buildRenderBodyRegisterCalls());
+      body.body.push(...buildRenderBodyRegisterCallsAt(Infinity));
     } else {
       for (const rp of returnPaths) {
-        rp.insertBefore(buildRenderBodyRegisterCalls());
+        const atPos = rp.node.start != null ? rp.node.start : Infinity;
+        rp.insertBefore(buildRenderBodyRegisterCallsAt(atPos));
       }
     }
 
@@ -988,6 +1161,99 @@ function getFunctionInTreePath(binding) {
   if (binding.path.isFunctionDeclaration()) return binding.path;
   if (binding.path.isVariableDeclarator()) return binding.path.get("init");
   return null;
+}
+
+// Known React component-wrapper higher-order calls. When a function expression
+// is passed directly to one of these, the inner function IS the component
+// definition — extraction (and hook injection) into it is safe. Anything else
+// looks like a callback (map/filter/forEach/custom HOF) and is skipped.
+const COMPONENT_WRAPPERS = new Set([
+  "memo",
+  "forwardRef",
+  "observer",  // MobX
+  "lazy",
+]);
+
+/**
+ * Heuristic: is `fnPath` a function we're willing to inject React hooks
+ * into? We need a real component (or hook caller) — injecting `useRef` /
+ * `useEffect` into an iteration callback violates rules-of-hooks and
+ * crashes at runtime. The check is intentionally conservative: when in
+ * doubt, we refuse to extract and leave the handler inline.
+ *
+ * Allowed shapes:
+ *   - `function Foo() {…}`              (PascalCase function declaration)
+ *   - `const Foo = () => {…}`           (PascalCase variable declarator)
+ *   - `export default function() {…}`    (anonymous default export)
+ *   - `export default () => {…}`         (anonymous default export, arrow)
+ *   - `memo(() => {…})` / `forwardRef((p, r) => {…})` / `observer(...)` / `lazy(...)`
+ *     and their member-call equivalents (`React.memo(...)`).
+ *
+ * Everything else — `.map(item => <li/>)`, `useEffect(() => {…})`, custom
+ * HOFs — falls through to `false`.
+ */
+function isLikelyComponentFn(fnPath) {
+  if (!fnPath) return false;
+
+  if (fnPath.isFunctionDeclaration() && fnPath.node.id) {
+    return /^[A-Z]/.test(fnPath.node.id.name);
+  }
+
+  const parent = fnPath.parentPath;
+  if (!parent) return false;
+
+  if (parent.isExportDefaultDeclaration()) return true;
+
+  if (parent.isVariableDeclarator()) {
+    const id = parent.node.id;
+    if (id && id.type === "Identifier") {
+      return /^[A-Z]/.test(id.name);
+    }
+    return false;
+  }
+
+  if (parent.isCallExpression()) {
+    const callee = parent.node.callee;
+    let calleeName = null;
+    if (callee.type === "Identifier") {
+      calleeName = callee.name;
+    } else if (
+      callee.type === "MemberExpression" &&
+      !callee.computed &&
+      callee.property.type === "Identifier"
+    ) {
+      calleeName = callee.property.name;
+    }
+    return !!(calleeName && COMPONENT_WRAPPERS.has(calleeName));
+  }
+
+  return false;
+}
+
+/**
+ * Return true if `binding` is a function declaration or a `const`/`let`/`var`
+ * whose init is an arrow / function expression. Used by `extractInlineFunctions`
+ * to detect captures that are same-file local functions (worth extracting,
+ * because they likely encapsulate logic we don't want in the main bundle) vs.
+ * captures that are props or plain state values (extraction would just add
+ * proxy overhead). `useCallback`-wrapped values (CallExpression init) are
+ * deliberately not counted as local functions — they're already a deliberate
+ * react-side abstraction and tend to depend on render-scope state.
+ */
+function isLocalFunctionBinding(binding) {
+  if (!binding || !binding.path) return false;
+  if (binding.path.isFunctionDeclaration()) return true;
+  if (binding.path.isVariableDeclarator()) {
+    const init = binding.path.node.init;
+    if (
+      init &&
+      (init.type === "ArrowFunctionExpression" ||
+        init.type === "FunctionExpression")
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
